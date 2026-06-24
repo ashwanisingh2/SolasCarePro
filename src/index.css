@@ -1,0 +1,158 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-brand-navy text-white transition-colors duration-300;
+  }
+  html.light-mode body {
+    @apply bg-slate-100 text-slate-900;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0F172A;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8B5CF6;
+}
+html.light-mode ::-webkit-scrollbar-track {
+  background: #E2E8F0;
+}
+html.light-mode ::-webkit-scrollbar-thumb {
+  background: #94A3B8;
+}
+
+/* Glass-morphism classes */
+.glass-panel {
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+html.light-mode .glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+.glass-button {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease-in-out;
+}
+html.light-mode .glass-button {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+.glass-button:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+/* Light mode text adjustments - using direct CSS instead of @apply to avoid circular dependency */
+html.light-mode .text-slate-200,
+html.light-mode .text-slate-300 {
+  color: #334155;
+}
+html.light-mode .text-slate-400,
+html.light-mode .text-slate-500 {
+  color: #64748B;
+}
+html.light-mode .text-slate-100 {
+  color: #1E293B;
+}
+html.light-mode .bg-slate-900,
+html.light-mode .bg-slate-950\/20,
+html.light-mode .bg-slate-950\/40,
+html.light-mode .bg-slate-950\/60,
+html.light-mode .bg-slate-950\/80 {
+  background-color: #FFFFFF;
+}
+html.light-mode .border-slate-800\/80,
+html.light-mode .border-brand-border {
+  border-color: #CBD5E1;
+}
+
+/* Animations */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(139, 92, 246, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.6); }
+}
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes slide-up {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* Tooltip styles */
+.tooltip-container {
+  position: relative;
+}
+.tooltip-container::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background: #1E293B;
+  color: white;
+  font-size: 11px;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.tooltip-container:hover::after {
+  opacity: 1;
+}
+
+/* Timeline styles */
+.timeline-line {
+  position: relative;
+  padding-left: 20px;
+}
+.timeline-line::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, #8B5CF6, #06B6D4);
+}
+.timeline-dot {
+  position: absolute;
+  left: -18px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #8B5CF6;
+  background: #0F172A;
+}
+html.light-mode .timeline-dot {
+  background: white;
+}
