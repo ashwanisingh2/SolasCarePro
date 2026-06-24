@@ -4,10 +4,14 @@
 
 @layer base {
   body {
+<<<<<<< HEAD
     @apply bg-brand-navy text-white transition-colors duration-300;
   }
   html.light-mode body {
     @apply bg-slate-100 text-slate-900;
+=======
+    @apply bg-brand-navy text-white;
+>>>>>>> ef9ba8c2986cbdc90189fe151417237d1c2946af
   }
 }
 
@@ -26,12 +30,15 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #8B5CF6;
 }
+<<<<<<< HEAD
 html.light-mode ::-webkit-scrollbar-track {
   background: #E2E8F0;
 }
 html.light-mode ::-webkit-scrollbar-thumb {
   background: #94A3B8;
 }
+=======
+>>>>>>> ef9ba8c2986cbdc90189fe151417237d1c2946af
 
 /* Glass-morphism classes */
 .glass-panel {
@@ -39,23 +46,30 @@ html.light-mode ::-webkit-scrollbar-thumb {
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
+<<<<<<< HEAD
 html.light-mode .glass-panel {
   background: rgba(255, 255, 255, 0.85);
   border: 1px solid rgba(0, 0, 0, 0.1);
 }
+=======
+>>>>>>> ef9ba8c2986cbdc90189fe151417237d1c2946af
 .glass-button {
   background: rgba(30, 41, 59, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.1);
   transition: all 0.2s ease-in-out;
 }
+<<<<<<< HEAD
 html.light-mode .glass-button {
   background: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(0, 0, 0, 0.1);
 }
+=======
+>>>>>>> ef9ba8c2986cbdc90189fe151417237d1c2946af
 .glass-button:hover:not(:disabled) {
   background: rgba(139, 92, 246, 0.2);
   border-color: rgba(139, 92, 246, 0.5);
 }
+<<<<<<< HEAD
 
 /* Light mode text adjustments - using direct CSS instead of @apply to avoid circular dependency */
 html.light-mode .text-slate-200,
@@ -156,3 +170,5 @@ html.light-mode .border-brand-border {
 html.light-mode .timeline-dot {
   background: white;
 }
+=======
+>>>>>>> ef9ba8c2986cbdc90189fe151417237d1c2946af
