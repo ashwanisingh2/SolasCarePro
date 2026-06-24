@@ -1,7 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, CircuitBoard, Info, MemoryStick, RefreshCw, Loader2, LibraryBig } from 'lucide-react';
+import { Cpu, CircuitBoard, Info, MemoryStick, RefreshCw, Loader2, LibraryBig, HardDrive, Network } from 'lucide-react';
 import { formatBytes } from '../utils/formatters';
 import { useNotification } from '../context/NotificationContext';
+
+function safeJsonParse(str, fallback = null) {
+  if (!str) return fallback;
+  try {
+    const startObj = str.indexOf('{');
+    const startArr = str.indexOf('[');
+    let startIndex = -1;
+    let endIndex = -1;
+    
+    if (startObj !== -1 && (startArr === -1 || startObj < startArr)) {
+      startIndex = startObj;
+      endIndex = str.lastIndexOf('}');
+    } else if (startArr !== -1) {
+      startIndex = startArr;
+      endIndex = str.lastIndexOf(']');
+    }
+    
+    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+      const jsonStr = str.substring(startIndex, endIndex + 1);
+      return JSON.parse(jsonStr);
+    }
+    
+    return JSON.parse(str.trim());
+  } catch (e) {
+    console.error('Failed to parse JSON:', e, 'Raw string:', str);
+    return fallback;
+  }
+}
 
 export default function HardwareInfo() {
   const { addNotification } = useNotification();
@@ -14,7 +42,7 @@ export default function HardwareInfo() {
       if (window.api) {
         const res = await window.api.runSystemCommand('get-hardware-info');
         if (res.success && res.stdout) {
-          setData(JSON.parse(res.stdout.trim()));
+          setData(safeJsonParse(res.stdout));
         } else {
           addNotification('Hardware Query', 'Failed to retrieve hardware specs', 'error');
         }
@@ -36,7 +64,13 @@ export default function HardwareInfo() {
             ]
           },
           Motherboard: { Manufacturer: 'ASUSTeK COMPUTER INC.', Product: 'ROG STRIX B550-F GAMING', SerialNumber: '21098234792348' },
-          BIOS: { Manufacturer: 'American Megatrends Inc.', Version: '3002', ReleaseDate: '2023-03-10' }
+          BIOS: { Manufacturer: 'American Megatrends Inc.', Version: '3002', ReleaseDate: '2023-03-10' },
+          Storage: [
+            { Model: 'Samsung SSD 980 PRO 1TB', SizeGB: 931.51, MediaType: 'SSD', InterfaceType: 'NVMe', SerialNumber: 'S690NX0R123456' }
+          ],
+          NetworkAdapters: [
+            { Name: 'Intel(R) Ethernet Controller I225-V', AdapterType: 'Ethernet 802.3', MACAddress: '00:1A:2B:3C:4D:5E', Speed: '1000 Mbps', Status: 2 }
+          ]
         });
       }
     } catch (e) {
@@ -69,12 +103,31 @@ export default function HardwareInfo() {
       </div>
 
       {loading ? (
-        <div className="py-24 text-center space-y-3">
-          <Loader2 className="h-10 w-10 animate-spin text-brand-violet mx-auto" />
-          <p className="text-xs text-slate-400">Querying motherboard chips, CPU registries, BIOS status and graphics devices...</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 select-none">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="glass-panel border border-brand-border rounded-xl p-5 space-y-4 animate-pulse bg-slate-900/10">
+              <div className="flex items-center gap-2 border-b border-brand-border pb-2">
+                <div className="h-5 w-5 bg-slate-800 rounded-full"></div>
+                <div className="h-4 bg-slate-800 rounded w-1/3"></div>
+              </div>
+              <div className="space-y-3">
+                <div className="h-5 bg-slate-800 rounded w-3/4"></div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <div className="h-3 bg-slate-800 rounded w-1/2"></div>
+                    <div className="h-4 bg-slate-800 rounded w-2/3"></div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="h-3 bg-slate-800 rounded w-1/2"></div>
+                    <div className="h-4 bg-slate-800 rounded w-2/3"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : data ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 select-none">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 select-none">
           {/* CPU Card */}
           {data.CPU && (
             <div className="glass-panel border border-brand-border rounded-xl p-5 space-y-4">
@@ -224,11 +277,65 @@ export default function HardwareInfo() {
               )}
             </div>
           </div>
+
+          {/* Storage Card */}
+          {data.Storage && data.Storage.length > 0 && (
+            <div className="glass-panel border border-brand-border rounded-xl p-5 space-y-4 bg-slate-900/10">
+              <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2 border-b border-brand-border pb-2">
+                <HardDrive className="h-5 w-5 text-amber-400" />
+                Physical Storage (Drives)
+              </h3>
+              <div className="space-y-4 text-xs">
+                {data.Storage.map((disk, idx) => (
+                  <div key={idx} className="space-y-1.5 border-b border-slate-900 last:border-0 pb-2.5 last:pb-0">
+                    <p className="font-bold text-slate-200">{disk.Model}</p>
+                    <div className="grid grid-cols-2 gap-2 text-slate-400">
+                      <div>Capacity: <span className="text-slate-300 font-semibold">{disk.SizeGB} GB</span></div>
+                      <div>Type: <span className="text-slate-300 font-semibold">{disk.MediaType || 'Fixed hard disk'}</span></div>
+                      <div>Interface: <span className="text-slate-300 font-semibold">{disk.InterfaceType}</span></div>
+                      <div className="truncate" title={disk.SerialNumber}>S/N: <span className="text-slate-400 font-mono text-[10px]">{disk.SerialNumber}</span></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Network Adapters Card */}
+          {data.NetworkAdapters && data.NetworkAdapters.length > 0 && (
+            <div className="glass-panel border border-brand-border rounded-xl p-5 space-y-4 bg-slate-900/10">
+              <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2 border-b border-brand-border pb-2">
+                <Network className="h-5 w-5 text-brand-cyan" />
+                Network Interfaces
+              </h3>
+              <div className="space-y-4 text-xs">
+                {data.NetworkAdapters.map((nic, idx) => (
+                  <div key={idx} className="space-y-1.5 border-b border-slate-900 last:border-0 pb-2.5 last:pb-0">
+                    <p className="font-bold text-slate-200">{nic.Name}</p>
+                    <div className="grid grid-cols-2 gap-2 text-slate-400">
+                      <div>Link Speed: <span className="text-slate-300 font-semibold">{nic.Speed}</span></div>
+                      <div>MAC: <span className="text-slate-400 font-mono text-[10px]">{nic.MACAddress}</span></div>
+                      <div className="col-span-2">Type: <span className="text-slate-300 font-semibold">{nic.AdapterType || 'Ethernet'}</span></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
-        <div className="py-24 text-center border border-dashed border-slate-800 rounded-2xl">
-          <Cpu className="h-10 w-10 text-slate-600 mx-auto mb-3" />
-          <p className="text-xs text-slate-400 font-bold">Failed to load hardware inventory.</p>
+        <div className="py-24 text-center border border-dashed border-slate-800 rounded-2xl space-y-4 bg-slate-900/10">
+          <Cpu className="h-10 w-10 text-slate-600 mx-auto mb-1 animate-pulse" />
+          <div>
+            <p className="text-xs text-slate-400 font-bold">Failed to load hardware specifications.</p>
+            <p className="text-[10px] text-slate-500 mt-1">Please check WMI service presence or try running as Administrator.</p>
+          </div>
+          <button
+            onClick={loadHardware}
+            className="px-5 py-2.5 bg-brand-violet hover:bg-brand-violet/85 text-xs font-bold rounded-lg text-white cursor-pointer shadow-lg hover:scale-[1.02] active:scale-95 transition-all"
+          >
+            Retry Query
+          </button>
         </div>
       )}
     </div>

@@ -89,6 +89,66 @@ export default function FixMyProblem() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
+  const formatDiagnosticOutput = (commandKey, stdout) => {
+    try {
+      const data = JSON.parse(stdout.trim());
+      const lines = [];
+      
+      if (commandKey === 'detect-network') {
+        lines.push(`[INFO] Connection Status: ${data.status === 'connected' ? 'CONNECTED' : 'DISCONNECTED'}`);
+        if (data.error) {
+          lines.push(`[ERROR] DNS Query failure: ${data.error}`);
+        } else {
+          lines.push(`[OK] Successfully resolved external hosts via DNS.`);
+        }
+        return lines;
+      }
+      
+      if (commandKey === 'detect-services') {
+        lines.push(`[INFO] Windows Critical Services Status:`);
+        if (Array.isArray(data)) {
+          data.forEach(srv => {
+            const statusStr = srv.Status === 4 ? 'RUNNING' : srv.Status === 1 ? 'STOPPED' : 'PENDING/UNKNOWN';
+            lines.push(`  - ${srv.Name}: ${statusStr} (Startup: ${srv.StartType || 'Manual'})`);
+          });
+        } else {
+          lines.push(`  No services records available.`);
+        }
+        return lines;
+      }
+      
+      if (commandKey === 'detect-performance') {
+        lines.push(`[INFO] High Load Top Resource Consumers (CPU/RAM):`);
+        if (Array.isArray(data)) {
+          data.forEach(proc => {
+            const cpuVal = proc.CPU !== null ? `${Math.round(proc.CPU)}%` : 'N/A';
+            const ramMb = proc.WorkingSet ? `${Math.round(proc.WorkingSet / 1024 / 1024)} MB` : 'N/A';
+            lines.push(`  - ${proc.ProcessName}: CPU ${cpuVal} | RAM Working Set: ${ramMb}`);
+          });
+        } else {
+          lines.push(`  No active processes found.`);
+        }
+        return lines;
+      }
+      
+      if (commandKey === 'detect-crashes') {
+        lines.push(`[INFO] System Event Log Diagnostic Crashes (Last 7 Days):`);
+        if (Array.isArray(data) && data.length > 0) {
+          data.forEach(ev => {
+            lines.push(`  - [${ev.TimeCreated}] ID ${ev.Id} from ${ev.ProviderName}`);
+            lines.push(`    Message: ${ev.Message.slice(0, 120)}...`);
+          });
+        } else {
+          lines.push(`  [OK] No critical system crashes recorded in logs.`);
+        }
+        return lines;
+      }
+    } catch (e) {
+      // Return null to fallback to raw stdout formatting
+    }
+    return null;
+  };
+
   const run = async (label, commandKey) => {
     setActiveAction(label);
     setStatus({ state: 'running', text: `${label} running for ${selected[0]}...` });
@@ -101,9 +161,18 @@ export default function FixMyProblem() {
         : { success: true, stdout: 'Preview mode completed.' };
       if (result.success) {
         setStatus({ state: 'success', text: `${label} completed successfully.` });
+        
+        let outputLines = [];
+        const formatted = formatDiagnosticOutput(commandKey, result.stdout);
+        if (formatted) {
+          outputLines = formatted;
+        } else if (result.stdout) {
+          outputLines = result.stdout.split('\n').filter(Boolean);
+        }
+        
         setLogs((prev) => [
           ...prev,
-          ...(result.stdout ? result.stdout.split('\n').filter(Boolean) : []),
+          ...outputLines,
           `[SUCCESS] ${label} completed.`,
         ]);
       } else if (result.cancelled) {

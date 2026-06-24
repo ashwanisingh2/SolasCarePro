@@ -77,32 +77,83 @@ switch ($Action.ToLower()) {
     }
     
     "rollback" {
-        pnputil /scan-devices | Out-Null
+        Write-Output "[SYSTEM] Triggering driver rollback and hardware rescan..."
+        pnputil.exe /scan-devices | Out-Null
         Write-Output "Device rolled back and rescan triggered."
     }
     
     "update" {
-        pnputil /scan-devices | Out-Null
+        Write-Output "[SYSTEM] Initiating driver search, download, and update for device: $PnpDeviceId..."
+        
+        # Method 1: Using pnputil /update-device (Win 10/11 native, robust)
         try {
-            $session = New-Object -ComObject Microsoft.Update.Session
-            $searcher = $session.CreateUpdateSearcher()
-            $searchResult = $searcher.Search("IsInstalled=0 and Type='Driver'")
-            
-            if ($searchResult.Updates.Count -gt 0) {
-                Write-Output "Found $($searchResult.Updates.Count) driver updates on Windows Update. Installing..."
-                $downloader = $session.CreateUpdateDownloader()
-                $downloader.Updates = $searchResult.Updates
-                $downloader.Download()
-                
-                $installer = $session.CreateUpdateInstaller()
-                $installer.Updates = $searchResult.Updates
-                $res = $installer.Install()
-                Write-Output "Installation finished. Result Code: $($res.ResultCode)"
-            } else {
-                Write-Output "No updates found for this device on Windows Update catalog."
+            Write-Output "[SYSTEM] Triggering pnputil update-device..."
+            $pnpOut = pnputil.exe /update-device $PnpDeviceId 2>&1
+            Write-Output $pnpOut
+            if ($pnpOut -match "successfully" -or $pnpOut -match "updated" -or $LASTEXITCODE -eq 0) {
+                Write-Output "[SUCCESS] Driver update succeeded via pnputil."
+                exit 0
             }
         } catch {
-            Write-Output "Skipped Windows Update catalog check: $_"
+            Write-Output "[WARNING] pnputil update-device failed or not supported: $_"
+        }
+
+        # Method 2: Fall back to Windows Update Agent COM search
+        try {
+            Write-Output "[SYSTEM] Falling back to Windows Update Agent COM search..."
+            $session = New-Object -ComObject Microsoft.Update.Session
+            $searcher = $session.CreateUpdateSearcher()
+            # Find drivers that are not installed
+            $searchResult = $searcher.Search("IsInstalled=0 and Type='Driver'")
+            
+            # Match updates that belong to our device
+            $matchedUpdate = $null
+            $device = Get-WmiObject -Class Win32_PnPEntity -Filter "DeviceID='$PnpDeviceId'"
+            $hwIds = $device.HardwareID
+            
+            Write-Output "Found $($searchResult.Updates.Count) total pending driver updates. Matching with device..."
+            foreach ($update in $searchResult.Updates) {
+                # Check if update description or title matches our device name or hardware ID
+                foreach ($hwId in $hwIds) {
+                    if ($update.Title -like "*$hwId*" -or $update.Description -like "*$hwId*") {
+                        $matchedUpdate = $update
+                        break
+                    }
+                }
+                if ($matchedUpdate) { break }
+                if ($update.Title -like "*$($device.Name)*") {
+                    $matchedUpdate = $update
+                    break
+                }
+            }
+            
+            if ($matchedUpdate) {
+                Write-Output "Matched driver update found: $($matchedUpdate.Title). Downloading..."
+                
+                $updatesColl = New-Object -ComObject Microsoft.Update.UpdateColl
+                $updatesColl.Add($matchedUpdate) | Out-Null
+                
+                $downloader = $session.CreateUpdateDownloader()
+                $downloader.Updates = $updatesColl
+                $downloader.Download()
+                
+                Write-Output "Installing driver update..."
+                $installer = $session.CreateUpdateInstaller()
+                $installer.Updates = $updatesColl
+                $res = $installer.Install()
+                
+                Write-Output "Installation finished. Result Code: $($res.ResultCode)"
+                if ($res.ResultCode -eq 2 -or $res.ResultCode -eq 3) {
+                    Write-Output "[SUCCESS] Driver update installed successfully."
+                } else {
+                    Write-Error "Driver installation failed with code: $($res.ResultCode)"
+                }
+            } else {
+                Write-Output "No matching driver updates found in Windows Update catalog."
+            }
+        } catch {
+            Write-Error "Driver update failed: $_"
+            exit 1
         }
     }
     

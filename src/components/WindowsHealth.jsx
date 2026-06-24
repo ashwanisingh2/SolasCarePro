@@ -6,6 +6,34 @@ import {
 import { useNotification } from '../context/NotificationContext';
 import { formatDate } from '../utils/formatters';
 
+function safeJsonParse(str, fallback = null) {
+  if (!str) return fallback;
+  try {
+    const startObj = str.indexOf('{');
+    const startArr = str.indexOf('[');
+    let startIndex = -1;
+    let endIndex = -1;
+    
+    if (startObj !== -1 && (startArr === -1 || startObj < startArr)) {
+      startIndex = startObj;
+      endIndex = str.lastIndexOf('}');
+    } else if (startArr !== -1) {
+      startIndex = startArr;
+      endIndex = str.lastIndexOf(']');
+    }
+    
+    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+      const jsonStr = str.substring(startIndex, endIndex + 1);
+      return JSON.parse(jsonStr);
+    }
+    
+    return JSON.parse(str.trim());
+  } catch (e) {
+    console.error('Failed to parse JSON:', e, 'Raw string:', str);
+    return fallback;
+  }
+}
+
 export default function WindowsHealth() {
   const { addNotification } = useNotification();
   
@@ -14,12 +42,14 @@ export default function WindowsHealth() {
   const [actInfo, setActInfo] = useState(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [activationStatus, setActivationStatus] = useState('idle'); // 'idle' | 'success' | 'error'
   const [activationLogs, setActivationLogs] = useState([]);
   
   // DISM state
   const [componentStore, setComponentStore] = useState(null);
   const [loadingStore, setLoadingStore] = useState(false);
   const [cleaningStore, setCleaningStore] = useState(false);
+  const [cleanupStatus, setCleanupStatus] = useState('idle'); // 'idle' | 'success' | 'error'
   const [cleanupLogs, setCleanupLogs] = useState([]);
   
   const dismLogsEndRef = useRef(null);
@@ -36,12 +66,12 @@ export default function WindowsHealth() {
       if (window.api) {
         const resInfo = await window.api.runSystemCommand('get-windows-info');
         if (resInfo.success && resInfo.stdout) {
-          setWinInfo(JSON.parse(resInfo.stdout.trim()));
+          setWinInfo(safeJsonParse(resInfo.stdout));
         }
         
         const resAct = await window.api.runSystemCommand('check-activation');
         if (resAct.success && resAct.stdout) {
-          setActInfo(JSON.parse(resAct.stdout.trim()));
+          setActInfo(safeJsonParse(resAct.stdout));
         }
       } else {
         // Mock
@@ -79,7 +109,7 @@ export default function WindowsHealth() {
       if (window.api) {
         const res = await window.api.runSystemCommand('analyze-component-store');
         if (res.success && res.stdout) {
-          setComponentStore(JSON.parse(res.stdout.trim()));
+          setComponentStore(safeJsonParse(res.stdout));
         }
       } else {
         await new Promise(r => setTimeout(r, 1000));
@@ -98,6 +128,7 @@ export default function WindowsHealth() {
 
   const runActivationRepair = async () => {
     setActivating(true);
+    setActivationStatus('idle');
     setActivationLogs(['[SYSTEM] Initiating Windows online activation sequence...', '']);
     let unsub = null;
     if (window.api && window.api.onStream) {
@@ -111,27 +142,36 @@ export default function WindowsHealth() {
         if (res.success) {
           setActivationLogs(prev => [...prev, '', '[SUCCESS] Online activation command completed successfully.']);
           addNotification('Activation Repair', 'Windows online activation attempt complete.', 'success');
+          setActivationStatus('success');
           loadInfo();
         } else if (res.cancelled) {
           setActivationLogs(prev => [...prev, '', '[CANCELLED] Activation repair cancelled.']);
+          setActivationStatus('idle');
         } else {
           setActivationLogs(prev => [...prev, '', `[ERROR] Activation failed: ${res.error || res.stderr}`]);
+          setActivationStatus('error');
         }
       } else {
         await new Promise(r => setTimeout(r, 1500));
         setActivationLogs(prev => [...prev, '[MOCK] slmgr /ato executed successfully.']);
         addNotification('Activation Repair', 'Windows activated (MOCK).', 'success');
+        setActivationStatus('success');
       }
     } catch (e) {
       setActivationLogs(prev => [...prev, '', `[ERROR] ${e.message}`]);
+      setActivationStatus('error');
     } finally {
       if (unsub) unsub();
       setActivating(false);
+      setTimeout(() => {
+        setActivationStatus('idle');
+      }, 2000);
     }
   };
 
   const runComponentStoreCleanup = async () => {
     setCleaningStore(true);
+    setCleanupStatus('idle');
     setCleanupLogs(['[SYSTEM] Executing WinSxS Component Store deep cleanup...', '[SYSTEM] Warning: This operation removes superseded component base packages and is IRREVERSIBLE.', '']);
     let unsub = null;
     if (window.api && window.api.onStream) {
@@ -143,25 +183,34 @@ export default function WindowsHealth() {
       if (window.api) {
         const res = await window.api.runSystemCommand('cleanup-component-store');
         if (res.success && res.stdout) {
-          const detail = JSON.parse(res.stdout.split('\n').pop().trim());
-          setCleanupLogs(prev => [...prev, '', `[SUCCESS] Clean complete! Reclaimed ${detail.freedSpaceGB || 0} GB of storage space.`]);
-          addNotification('Store Cleaned', `Component store cleanup complete. Freed ${detail.freedSpaceGB || 0} GB.`, 'success');
+          const detail = safeJsonParse(res.stdout);
+          const freedSpace = detail ? detail.freedSpaceGB : 0;
+          setCleanupLogs(prev => [...prev, '', `[SUCCESS] Clean complete! Reclaimed ${freedSpace || 0} GB of storage space.`]);
+          addNotification('Store Cleaned', `Component store cleanup complete. Freed ${freedSpace || 0} GB.`, 'success');
+          setCleanupStatus('success');
           loadComponentStoreInfo();
         } else if (res.cancelled) {
           setCleanupLogs(prev => [...prev, '', '[CANCELLED] Component store cleanup cancelled.']);
+          setCleanupStatus('idle');
         } else {
           setCleanupLogs(prev => [...prev, '', `[ERROR] Cleanup failed: ${res.error}`]);
+          setCleanupStatus('error');
         }
       } else {
         await new Promise(r => setTimeout(r, 2000));
         setCleanupLogs(prev => [...prev, '[MOCK] Component store cleanup completed. Reclaimed 1.25 GB.']);
         addNotification('Store Cleaned', 'Cleanup completed (MOCK).', 'success');
+        setCleanupStatus('success');
       }
     } catch (e) {
       setCleanupLogs(prev => [...prev, '', `[ERROR] ${e.message}`]);
+      setCleanupStatus('error');
     } finally {
       if (unsub) unsub();
       setCleaningStore(false);
+      setTimeout(() => {
+        setCleanupStatus('idle');
+      }, 2000);
     }
   };
 
@@ -169,6 +218,94 @@ export default function WindowsHealth() {
     loadInfo();
     loadComponentStoreInfo();
   }, []);
+
+  const getActivationBtnContent = () => {
+    if (activating) {
+      return (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Activating...</span>
+        </>
+      );
+    }
+    if (activationStatus === 'success') {
+      return (
+        <>
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          <span>Activated Successfully</span>
+        </>
+      );
+    }
+    if (activationStatus === 'error') {
+      return (
+        <>
+          <AlertTriangle className="h-4 w-4 text-rose-400" />
+          <span>Activation Failed</span>
+        </>
+      );
+    }
+    return (
+      <>
+        <RefreshCw className="h-4 w-4" />
+        <span>Attempt Online Activation</span>
+      </>
+    );
+  };
+
+  const getActivationBtnClass = () => {
+    const base = "w-full py-2.5 text-xs font-bold rounded-lg text-white flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-colors duration-200 ";
+    if (activationStatus === 'success') {
+      return base + "bg-emerald-600 hover:bg-emerald-500";
+    }
+    if (activationStatus === 'error') {
+      return base + "bg-rose-600 hover:bg-rose-500";
+    }
+    return base + "bg-brand-violet hover:bg-brand-violet/85";
+  };
+
+  const getCleanupBtnContent = () => {
+    if (cleaningStore) {
+      return (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Cleaning Store...</span>
+        </>
+      );
+    }
+    if (cleanupStatus === 'success') {
+      return (
+        <>
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          <span>Cleanup Complete</span>
+        </>
+      );
+    }
+    if (cleanupStatus === 'error') {
+      return (
+        <>
+          <AlertTriangle className="h-4 w-4 text-rose-400" />
+          <span>Cleanup Failed</span>
+        </>
+      );
+    }
+    return (
+      <>
+        <Sparkles className="h-4 w-4" />
+        <span>Perform WinSxS ResetBase Cleanup</span>
+      </>
+    );
+  };
+
+  const getCleanupBtnClass = () => {
+    const base = "w-full py-2.5 text-xs font-black rounded-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-colors duration-200 ";
+    if (cleanupStatus === 'success') {
+      return base + "bg-emerald-600 text-white hover:bg-emerald-500";
+    }
+    if (cleanupStatus === 'error') {
+      return base + "bg-rose-600 text-white hover:bg-rose-500";
+    }
+    return base + "bg-amber-500 text-slate-950 hover:bg-amber-400";
+  };
 
   return (
     <div className="p-6 space-y-6 text-left select-none">
@@ -264,12 +401,11 @@ export default function WindowsHealth() {
               
               <div className="pt-2">
                 <button
-                  disabled={activating}
+                  disabled={activating || activationStatus !== 'idle'}
                   onClick={runActivationRepair}
-                  className="w-full py-2.5 bg-brand-violet hover:bg-brand-violet/85 text-xs font-bold rounded-lg text-white flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className={getActivationBtnClass()}
                 >
-                  {activating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  Attempt Online Activation
+                  {getActivationBtnContent()}
                 </button>
               </div>
 
@@ -318,12 +454,11 @@ export default function WindowsHealth() {
 
                 <div className="pt-2">
                   <button
-                    disabled={cleaningStore || componentStore.reclaimableGB === 0}
+                    disabled={cleaningStore || cleanupStatus !== 'idle' || componentStore.reclaimableGB === 0}
                     onClick={runComponentStoreCleanup}
-                    className="w-full py-2.5 bg-amber-500 text-slate-950 hover:bg-amber-400 text-xs font-black rounded-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className={getCleanupBtnClass()}
                   >
-                    {cleaningStore ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    Perform WinSxS ResetBase Cleanup
+                    {getCleanupBtnContent()}
                   </button>
                 </div>
               </div>

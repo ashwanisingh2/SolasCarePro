@@ -5,25 +5,24 @@ import {
   Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw
 } from 'lucide-react';
 
-import OneClickDashboard from './components/RepairDashboard';
-import CoreRepair from './components/OneClickCare';
-import WindowsHealth from './components/WindowsHealth';
-import DriverManager from './components/DriverManager';
-import NetworkMonitor from './components/NetworkMonitor';
-import HardwareDiagnostics from './components/HardwareDiagnostics';
-import SoftwareUpdater from './components/SoftwareUpdater';
-import BrowserRepair from './components/BrowserRepair';
-import MaintenanceHub from './components/MaintenanceHub';
-import ServiceManager from './components/ServiceManager';
-import RegistryManager from './components/RegistryManager';
-import HardwareInfo from './components/HardwareInfo';
-import Diagnostics from './components/Diagnostics';
-import HistoryLogs from './components/HistoryLogs';
-import AutoPilot from './components/AutoPilot';
-import FixMyProblem from './components/FixMyProblem';
-import QuickFix from './components/QuickFix';
-import SettingsView from './components/Settings';
-import PowerFeatures from './components/PowerFeatures';
+const OneClickDashboard = React.lazy(() => import('./components/RepairDashboard'));
+const CoreRepair = React.lazy(() => import('./components/OneClickCare'));
+const WindowsHealth = React.lazy(() => import('./components/WindowsHealth'));
+const DriverManager = React.lazy(() => import('./components/DriverManager'));
+const PowerFeatures = React.lazy(() => import('./components/PowerFeatures'));
+const HardwareDiagnostics = React.lazy(() => import('./components/HardwareDiagnostics'));
+const SoftwareUpdater = React.lazy(() => import('./components/SoftwareUpdater'));
+const BrowserRepair = React.lazy(() => import('./components/BrowserRepair'));
+const MaintenanceHub = React.lazy(() => import('./components/MaintenanceHub'));
+const ServiceManager = React.lazy(() => import('./components/ServiceManager'));
+const RegistryManager = React.lazy(() => import('./components/RegistryManager'));
+const HardwareInfo = React.lazy(() => import('./components/HardwareInfo'));
+const Diagnostics = React.lazy(() => import('./components/Diagnostics'));
+const AutoPilot = React.lazy(() => import('./components/AutoPilot'));
+const FixMyProblem = React.lazy(() => import('./components/FixMyProblem'));
+const QuickFix = React.lazy(() => import('./components/QuickFix'));
+const SettingsView = React.lazy(() => import('./components/Settings'));
+
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -32,6 +31,7 @@ export default function App() {
   const [systemInfo, setSystemInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState('dark');
+  const [visitedTabs, setVisitedTabs] = useState(['dashboard']);
 
   // Load persistence theme on mount (FIX 6)
   useEffect(() => {
@@ -78,6 +78,13 @@ export default function App() {
     }
   }, [theme]);
 
+  // Accumulate visited tabs dynamically to implement state-preserving lazy mount
+  useEffect(() => {
+    if (!visitedTabs.includes(activeTab)) {
+      setVisitedTabs(prev => [...prev, activeTab]);
+    }
+  }, [activeTab]);
+
   // Deep linking and routing mapper
   const handleSetActiveTab = (tabId) => {
     if (tabId === 'fix' || tabId === 'care') {
@@ -89,24 +96,22 @@ export default function App() {
       setPowerSubTab('performance');
     } else if ([
       'performance', 'network', 'startup', 'battery', 
-      'privacy', 'largefiles'
+      'privacy', 'largefiles', 'history'
     ].includes(tabId)) {
       setActiveTab('power');
       setPowerSubTab(tabId);
-    } else if (tabId === 'history' || tabId === 'logs') {
-      setActiveTab('history');
     } else {
       setActiveTab(tabId);
     }
   };
 
+  // Removed duplicates from sidebar (Network and History & Logs are available inside Power Features subtabs)
   const navigation = [
     { id: 'dashboard',    label: 'Dashboard',          icon: LayoutDashboard,  component: OneClickDashboard },
     { id: 'core',         label: 'Core Repair',         icon: Wrench,           component: CoreRepair },
     { id: 'windows',      label: 'Windows',             icon: MonitorCheck,     component: WindowsHealth },
     { id: 'driver',       label: 'Drivers',             icon: Cpu,              component: DriverManager },
     { id: 'power',        label: 'Power Features',      icon: Zap,              component: PowerFeatures },
-    { id: 'network',      label: 'Network',             icon: Wifi,             component: NetworkMonitor },
     { id: 'hardware',     label: 'Hardware',            icon: CircuitBoard,     component: HardwareDiagnostics },
     { id: 'software',     label: 'Software',            icon: Package,          component: SoftwareUpdater },
     { id: 'browser',      label: 'Browser Repair',      icon: Globe,            component: BrowserRepair },
@@ -115,34 +120,15 @@ export default function App() {
     { id: 'registry',     label: 'Registry',            icon: Database,         component: RegistryManager },
     { id: 'hardware-info',label: 'Hardware Info',       icon: Info,             component: HardwareInfo },
     { id: 'diagnostics',  label: 'Diagnostics',         icon: Activity,         component: Diagnostics },
-    { id: 'history',      label: 'History & Logs',      icon: History,          component: HistoryLogs },
     { id: 'autopilot',    label: 'Auto-Pilot',          icon: Bot,              component: AutoPilot },
     { id: 'fix',          label: 'Fix My Problem',      icon: LifeBuoy,         component: FixMyProblem },
     { id: 'quickfix',     label: 'Quick Fix',           icon: Zap,              component: QuickFix },
     { id: 'settings',     label: 'Settings',            icon: Settings,         component: SettingsView },
   ];
 
-  const renderContent = () => {
-    const item = navigation.find(n => n.id === activeTab);
-    if (item) {
-      const Component = item.component;
-      if (activeTab === 'dashboard') {
-        return <Component setActiveTab={handleSetActiveTab} />;
-      }
-      if (activeTab === 'settings') {
-        return <Component theme={theme} setTheme={handleSetTheme} />;
-      }
-      if (activeTab === 'power') {
-        return <Component activeSubTab={powerSubTab} setActiveSubTab={handleSetActiveTab} />;
-      }
-      return <Component />;
-    }
-    return <OneClickDashboard setActiveTab={handleSetActiveTab} />;
-  };
-
   const getBreadcrumb = () => {
     const item = navigation.find(n => n.id === activeTab);
-    return item ? item.label : 'Dashboard';
+    return item ? item.label : 'Power Features';
   };
 
   if (loading) {
@@ -240,9 +226,36 @@ export default function App() {
           </div>
         )}
 
-        {/* Body View Host */}
-        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-brand-navy via-slate-900 to-brand-navy transition-colors duration-300">
-          {renderContent()}
+        {/* Body View Host with state-preserving tabs visibility toggling */}
+        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-brand-navy via-slate-900 to-brand-navy transition-colors duration-300 relative">
+          <React.Suspense fallback={
+            <div className="flex h-full w-full items-center justify-center bg-brand-navy">
+              <RefreshCw className="h-6 w-6 animate-spin text-brand-violet" />
+            </div>
+          }>
+            {navigation.map((item) => {
+              const Component = item.component;
+              const isVisited = visitedTabs.includes(item.id);
+              const isActive = activeTab === item.id;
+              if (!isVisited) return null;
+              return (
+                <div 
+                  key={item.id} 
+                  className={isActive ? "h-full w-full" : "hidden"}
+                >
+                  {item.id === 'dashboard' ? (
+                    <Component setActiveTab={handleSetActiveTab} />
+                  ) : item.id === 'settings' ? (
+                    <Component theme={theme} setTheme={handleSetTheme} />
+                  ) : item.id === 'power' ? (
+                    <Component activeSubTab={powerSubTab} setActiveSubTab={handleSetActiveTab} />
+                  ) : (
+                    <Component />
+                  )}
+                </div>
+              );
+            })}
+          </React.Suspense>
         </div>
       </main>
     </div>

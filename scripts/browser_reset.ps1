@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet('chrome', 'firefox', 'edge', 'brave', 'all')]
+    [ValidateSet('chrome', 'firefox', 'edge', 'brave', 'opera', 'all')]
     [string]$Browser,
 
     [Parameter(Mandatory=$true)]
@@ -9,7 +9,7 @@ param(
     [string]$Action
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'SilentlyContinue'
 
 $chromeCache = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Cache"
 $chromeFull = @(
@@ -41,6 +41,16 @@ $braveFull = @(
     "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data\Default\Local Storage"
 )
 
+$operaCache = "$env:LOCALAPPDATA\Opera Software\Opera Stable\Cache"
+$operaFull = @(
+    "$env:LOCALAPPDATA\Opera Software\Opera Stable\Cache",
+    "$env:LOCALAPPDATA\Opera Software\Opera Stable\Network\Cookies",
+    "$env:LOCALAPPDATA\Opera Software\Opera Stable\Network\Cookies-journal",
+    "$env:LOCALAPPDATA\Opera Software\Opera Stable\History",
+    "$env:LOCALAPPDATA\Opera Software\Opera Stable\History-journal",
+    "$env:LOCALAPPDATA\Opera Software\Opera Stable\Local Storage"
+)
+
 function Get-FirefoxCachePaths {
     $profilesDir = "$env:APPDATA\Mozilla\Firefox\Profiles"
     if (Test-Path $profilesDir) {
@@ -66,24 +76,77 @@ function Get-FirefoxFullPaths {
 }
 
 function Test-BrowserInstalled ($name) {
+    # 1. Standard Filesystem path check
+    $paths = @()
     if ($name -eq 'chrome') {
-        return (Test-Path "$env:ProgramFiles\Google\Chrome\Application\chrome.exe") -or 
-               (Test-Path "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe") -or
-               (Test-Path "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe")
+        $paths = @(
+            "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+            "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+            "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+        )
+    } elseif ($name -eq 'firefox') {
+        $paths = @(
+            "$env:ProgramFiles\Mozilla Firefox\firefox.exe",
+            "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe"
+        )
+    } elseif ($name -eq 'edge') {
+        $paths = @(
+            "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
+            "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+        )
+    } elseif ($name -eq 'brave') {
+        $paths = @(
+            "$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe",
+            "${env:ProgramFiles(x86)}\BraveSoftware\Brave-Browser\Application\brave.exe",
+            "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\Application\brave.exe"
+        )
+    } elseif ($name -eq 'opera') {
+        $paths = @(
+            "$env:ProgramFiles\Opera\opera.exe",
+            "${env:ProgramFiles(x86)}\Opera\opera.exe",
+            "$env:LOCALAPPDATA\Programs\Opera\opera.exe",
+            "$env:LOCALAPPDATA\Programs\Opera Developer\opera.exe"
+        )
     }
-    if ($name -eq 'firefox') {
-        return (Test-Path "$env:ProgramFiles\Mozilla Firefox\firefox.exe") -or 
-               (Test-Path "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe")
+
+    foreach ($p in $paths) {
+        if (Test-Path $p) { return $true }
     }
-    if ($name -eq 'edge') {
-        return (Test-Path "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") -or 
-               (Test-Path "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe")
+
+    # 2. Windows StartMenuInternet registration check
+    $regRoots = @("HKLM:\SOFTWARE\Clients\StartMenuInternet", "HKCU:\SOFTWARE\Clients\StartMenuInternet")
+    foreach ($root in $regRoots) {
+        if (Test-Path $root) {
+            $subkeys = Get-ChildItem -Path $root -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+            foreach ($sk in $subkeys) {
+                if ($name -eq 'chrome' -and $sk -match "Chrome") { return $true }
+                if ($name -eq 'firefox' -and $sk -match "Firefox") { return $true }
+                if ($name -eq 'edge' -and $sk -match "MSEdge") { return $true }
+                if ($name -eq 'brave' -and $sk -match "Brave") { return $true }
+                if ($name -eq 'opera' -and $sk -match "Opera") { return $true }
+            }
+        }
     }
-    if ($name -eq 'brave') {
-        return (Test-Path "$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe") -or 
-               (Test-Path "${env:ProgramFiles(x86)}\BraveSoftware\Brave-Browser\Application\brave.exe") -or
-               (Test-Path "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\Application\brave.exe")
+
+    # 3. App Paths Registry checks
+    $appPathsKey = "SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"
+    $exeName = switch ($name) {
+        'chrome'  { "chrome.exe" }
+        'firefox' { "firefox.exe" }
+        'edge'    { "msedge.exe" }
+        'brave'   { "brave.exe" }
+        'opera'   { "opera.exe" }
     }
+    
+    if ($exeName) {
+        foreach ($hive in @("HKLM", "HKCU")) {
+            $pathToCheck = "$($hive):\$appPathsKey\$exeName"
+            if (Test-Path $pathToCheck) {
+                return $true
+            }
+        }
+    }
+
     return $false
 }
 
@@ -124,7 +187,8 @@ function Kill-BrowserProcess ($name) {
     if ($name -eq 'firefox') { $procNames += 'firefox' }
     if ($name -eq 'edge') { $procNames += 'msedge' }
     if ($name -eq 'brave') { $procNames += 'brave' }
-    if ($name -eq 'all') { $procNames += @('chrome', 'firefox', 'msedge', 'brave') }
+    if ($name -eq 'opera') { $procNames += 'opera' }
+    if ($name -eq 'all') { $procNames += @('chrome', 'firefox', 'msedge', 'brave', 'opera') }
 
     foreach ($pn in $procNames) {
         Stop-Process -Name $pn -Force -ErrorAction SilentlyContinue
@@ -138,13 +202,14 @@ if ($Action -eq 'detect') {
         firefox = Test-BrowserInstalled 'firefox'
         edge = Test-BrowserInstalled 'edge'
         brave = Test-BrowserInstalled 'brave'
+        opera = Test-BrowserInstalled 'opera'
     }
     Write-Output (ConvertTo-Json $status -Compress)
 }
 else {
     $selectedBrowsers = @()
     if ($Browser -eq 'all') {
-        $selectedBrowsers += @('chrome', 'firefox', 'edge', 'brave')
+        $selectedBrowsers += @('chrome', 'firefox', 'edge', 'brave', 'opera')
     } else {
         $selectedBrowsers += $Browser
     }
@@ -162,12 +227,14 @@ else {
             if ($b -eq 'chrome') { $targetPaths += $chromeCache }
             elseif ($b -eq 'edge') { $targetPaths += $edgeCache }
             elseif ($b -eq 'brave') { $targetPaths += $braveCache }
+            elseif ($b -eq 'opera') { $targetPaths += $operaCache }
             elseif ($b -eq 'firefox') { $targetPaths += Get-FirefoxCachePaths }
         } else {
             Kill-BrowserProcess $b
             if ($b -eq 'chrome') { $targetPaths += $chromeFull }
             elseif ($b -eq 'edge') { $targetPaths += $edgeFull }
             elseif ($b -eq 'brave') { $targetPaths += $braveFull }
+            elseif ($b -eq 'opera') { $targetPaths += $operaFull }
             elseif ($b -eq 'firefox') { $targetPaths += Get-FirefoxFullPaths }
         }
 

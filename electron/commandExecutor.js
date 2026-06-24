@@ -50,6 +50,15 @@ function getScriptPath(scriptName) {
   return fullPath;
 }
 
+function getPowershellPath() {
+  const useSysnative = process.env.PROCESSOR_ARCHITEW6432 || (process.platform === 'win32' && process.arch === 'ia32');
+  const windir = process.env.windir || 'C:\\Windows';
+  return useSysnative 
+    ? path.join(windir, 'sysnative', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    : 'powershell.exe';
+}
+
+
 async function confirmCommand(cmd) {
   if (!cmd.confirmationRequired) return true;
   const result = await dialog.showMessageBox(getMainWindowRef(), {
@@ -155,29 +164,33 @@ async function executeAllowedCommand(commandKey, rawArgs, options = {}) {
 
   if (cmd.type === 'native') {
     const nativeResult = await cmd.handler(args);
-    return { success: true, stdout: nativeResult || '' };
+    return { success: true, stdout: nativeResult || '', exitCode: 0 };
   }
 
   if (cmd.type === 'powershell') {
     const command = cmd.buildCommand ? cmd.buildCommand(args) : cmd.command;
-    return await runChildProcess('powershell.exe', [
+    const utf8Command = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${command}`;
+    return await runChildProcess(getPowershellPath(), [
       '-NoProfile',
       '-ExecutionPolicy',
       'Bypass',
       '-Command',
-      command
+      utf8Command
     ], { timeout: cmd.timeout, streamChannel });
   }
 
   const scriptArgs = cmd.buildArgs ? cmd.buildArgs(args) : [];
   const scriptPath = getScriptPath(cmd.script);
-  return await runChildProcess('powershell.exe', [
+  
+  // Wrap script run in a command block that configures output encoding to UTF8
+  const scriptCall = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; & '${scriptPath}' ${scriptArgs.map(arg => `'${String(arg).replace(/'/g, "''")}'`).join(' ')}`;
+  
+  return await runChildProcess(getPowershellPath(), [
     '-NoProfile',
     '-ExecutionPolicy',
     'Bypass',
-    '-File',
-    scriptPath,
-    ...scriptArgs.map(String)
+    '-Command',
+    scriptCall
   ], { timeout: cmd.timeout, streamChannel });
 }
 
@@ -287,14 +300,17 @@ const ALLOWED_COMMANDS = {
     confirmationRequired: true,
     confirmationMessage: 'This will move selected temporary files into a backup area before deletion. Continue?',
     buildArgs: ([filesJson]) => {
-      if (typeof filesJson !== 'string' || filesJson.length > 1024 * 1024) {
+      if (typeof filesJson !== 'string' || filesJson.length > 10 * 1024 * 1024) {
         throw new Error('Invalid cleanup file list.');
       }
       const parsed = JSON.parse(filesJson);
       if (!Array.isArray(parsed) || parsed.some(p => typeof p !== 'string')) {
         throw new Error('Invalid cleanup paths.');
       }
-      return ['-Action', 'clean', '-FilesJson', filesJson];
+      // Save files list to a temporary JSON file to avoid command-line character limitations
+      const tempPath = path.join(process.env.TEMP || 'C:\\Windows\\Temp', `solas_junk_${Date.now()}.json`);
+      fs.writeFileSync(tempPath, filesJson, 'utf8');
+      return ['-Action', 'clean', '-FilesPath', tempPath];
     }
   },
   'junk-undo': {
@@ -733,10 +749,18 @@ const ALLOWED_COMMANDS = {
     confirmationMessage: 'This will run a full system repair sequence and may take a long time. Continue?'
   },
   'detect-network': {
-    type: 'powershell',
-    command: 'Test-NetConnection 8.8.8.8; ipconfig /all',
-    timeout: 30000,
-    streamChannel: 'care-out'
+    type: 'native',
+    handler: async () => {
+      return new Promise((resolve) => {
+        require('dns').lookup('8.8.8.8', (err) => {
+          if (err) {
+            resolve(JSON.stringify({ success: false, status: 'disconnected', error: err.message }));
+          } else {
+            resolve(JSON.stringify({ success: true, status: 'connected' }));
+          }
+        });
+      });
+    }
   },
   'detect-performance': {
     type: 'powershell',
@@ -1249,5 +1273,6 @@ const ALLOWED_COMMANDS = {
 module.exports = {
   initCommandExecutor,
   executeAllowedCommand,
-  killActiveProcess
+  killActiveProcess,
+  getScriptPath
 };

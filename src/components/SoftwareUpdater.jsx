@@ -1,10 +1,38 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   CheckCircle, AlertTriangle, RefreshCw, XCircle, Terminal, 
-  Settings2, ArrowUpCircle, ExternalLink, RefreshCw as UpdateIcon
+  Settings2, ArrowUpCircle, ExternalLink, Download, AppWindow, Laptop, CheckCircle2
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import CommandOutput from './shared/CommandOutput';
+
+function safeJsonParse(str, fallback = []) {
+  if (!str) return fallback;
+  try {
+    const startObj = str.indexOf('{');
+    const startArr = str.indexOf('[');
+    let startIndex = -1;
+    let endIndex = -1;
+    
+    if (startObj !== -1 && (startArr === -1 || startObj < startArr)) {
+      startIndex = startObj;
+      endIndex = str.lastIndexOf('}');
+    } else if (startArr !== -1) {
+      startIndex = startArr;
+      endIndex = str.lastIndexOf(']');
+    }
+    
+    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+      const jsonStr = str.substring(startIndex, endIndex + 1);
+      return JSON.parse(jsonStr);
+    }
+    
+    return JSON.parse(str.trim());
+  } catch (e) {
+    console.error('Failed to parse JSON:', e, 'Raw string:', str);
+    return fallback;
+  }
+}
 
 export default function SoftwareUpdater() {
   const [subMode, setSubMode] = useState('apps'); // 'apps' or 'windows'
@@ -30,6 +58,11 @@ export default function SoftwareUpdater() {
   
   // Auto-update switch
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
+
+  const addLogs = (message) => {
+    const time = new Date().toLocaleTimeString(undefined, { hour12: false });
+    setTerminalLogs(prev => [...prev, `[${time}] ${message}`]);
+  };
 
   useEffect(() => {
     const checkDns = async () => {
@@ -97,7 +130,7 @@ export default function SoftwareUpdater() {
         if (window.api) {
           const res = await window.api.runSystemCommand('scan-software-updates');
           if (res.success && res.stdout) {
-            const list = JSON.parse(res.stdout.trim());
+            const list = safeJsonParse(res.stdout);
             setUpdates(list);
             setStatusMessage(`Scan completed. Found ${list.length} packages with pending updates.`);
           } else {
@@ -129,7 +162,7 @@ export default function SoftwareUpdater() {
         if (window.api) {
           const res = await window.api.runSystemCommand('check-windows-updates');
           if (res.success && res.stdout) {
-            const list = JSON.parse(res.stdout.trim());
+            const list = safeJsonParse(res.stdout);
             setWinUpdates(list);
             setStatusMessage(`Scan completed. Found ${list.length} pending Windows Updates.`);
           } else {

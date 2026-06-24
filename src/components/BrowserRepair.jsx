@@ -26,16 +26,16 @@ export default function BrowserRepair() {
         if (res.success && res.stdout) {
           const found = JSON.parse(res.stdout.trim());
           setBrowsers(found);
-          addLogs(`[OK] Detection complete: Chrome: ${found.chrome ? 'installed' : 'not found'}, Edge: ${found.edge ? 'installed' : 'not found'}, Firefox: ${found.firefox ? 'installed' : 'not found'}, Brave: ${found.brave ? 'installed' : 'not found'}`);
+          addLogs(`[OK] Detection complete: Chrome: ${found.chrome ? 'installed' : 'not found'}, Edge: ${found.edge ? 'installed' : 'not found'}, Firefox: ${found.firefox ? 'installed' : 'not found'}, Brave: ${found.brave ? 'installed' : 'not found'}, Opera: ${found.opera ? 'installed' : 'not found'}`);
         } else {
           addLogs('[ERROR] Failed to scan browser installations.');
         }
       } else {
         // Mock
         await new Promise(r => setTimeout(r, 1000));
-        const found = { chrome: true, edge: true, firefox: false, brave: true };
+        const found = { chrome: true, edge: true, firefox: false, brave: true, opera: true };
         setBrowsers(found);
-        addLogs(`[OK] (Mock) Detection complete: Chrome: installed, Edge: installed, Firefox: not found, Brave: installed`);
+        addLogs(`[OK] (Mock) Detection complete: Chrome: installed, Edge: installed, Firefox: not found, Brave: installed, Opera: installed`);
       }
     } catch (e) {
       console.error(e);
@@ -116,7 +116,8 @@ export default function BrowserRepair() {
     { key: 'chrome', name: 'Google Chrome', desc: 'Google chromium desktop browser' },
     { key: 'edge', name: 'Microsoft Edge', desc: 'Default built-in Windows browser' },
     { key: 'firefox', name: 'Mozilla Firefox', desc: 'Gecko engine open source browser' },
-    { key: 'brave', name: 'Brave Browser', desc: 'Privacy-first chromium web browser' }
+    { key: 'brave', name: 'Brave Browser', desc: 'Privacy-first chromium web browser' },
+    { key: 'opera', name: 'Opera Browser', desc: 'Opera desktop web browser' }
   ];
 
   return (
@@ -160,6 +161,7 @@ export default function BrowserRepair() {
                           item.key === 'chrome' ? 'text-red-400' :
                           item.key === 'edge' ? 'text-cyan-400' :
                           item.key === 'firefox' ? 'text-orange-400' :
+                          item.key === 'opera' ? 'text-red-600' :
                           'text-amber-400'
                         }`} />
                         {item.name}

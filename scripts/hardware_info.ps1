@@ -103,12 +103,60 @@ function Get-BiosInfo {
     }
 }
 
+function Get-StorageInfo {
+    try {
+        $disks = Get-CimInstance -ClassName Win32_DiskDrive
+        $list = @()
+        foreach ($disk in $disks) {
+            $sizeGB = 0
+            if ($disk.Size) {
+                $sizeGB = [math]::Round([double]$disk.Size / (1024*1024*1024), 2)
+            }
+            $list += @{
+                Model = $disk.Model
+                SizeGB = $sizeGB
+                MediaType = $disk.MediaType
+                InterfaceType = $disk.InterfaceType
+                SerialNumber = if ($disk.SerialNumber) { ($disk.SerialNumber -replace '\s+', ' ').Trim() } else { "N/A" }
+            }
+        }
+        return $list
+    } catch {
+        return $null
+    }
+}
+
+function Get-NetworkAdapterInfo {
+    try {
+        $adapters = Get-CimInstance -ClassName Win32_NetworkAdapter -Filter "PhysicalAdapter=True"
+        $list = @()
+        foreach ($adapter in $adapters) {
+            $speed = "N/A"
+            if ($adapter.Speed -gt 0) {
+                $speed = "$([math]::Round($adapter.Speed / 1000000, 0)) Mbps"
+            }
+            $list += @{
+                Name = $adapter.Name
+                AdapterType = $adapter.AdapterType
+                MACAddress = $adapter.MACAddress
+                Speed = $speed
+                Status = $adapter.NetConnectionStatus
+            }
+        }
+        return $list
+    } catch {
+        return $null
+    }
+}
+
 $output = @{
     CPU = Get-CpuInfo
     GPU = Get-GpuInfo
     RAM = Get-RamInfo
     Motherboard = Get-MotherboardInfo
     BIOS = Get-BiosInfo
+    Storage = Get-StorageInfo
+    NetworkAdapters = Get-NetworkAdapterInfo
 }
 
-Write-Output (ConvertTo-Json -InputObject $output -Depth 5 -Compress)
+Write-Output (ConvertTo-Json $output -Depth 5 -Compress)

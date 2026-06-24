@@ -1,12 +1,12 @@
 // squirrel startup hook check
 if (require('electron-squirrel-startup')) return;
 
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, shell, nativeImage, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { exec, spawn } = require('child_process');
-const { initCommandExecutor, executeAllowedCommand, killActiveProcess } = require('./electron/commandExecutor');
+const { initCommandExecutor, executeAllowedCommand, killActiveProcess, getScriptPath } = require('./electron/commandExecutor');
 
 let mainWindow;
 let tray = null;
@@ -358,6 +358,10 @@ async function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  setTimeout(() => {
+    checkBackgroundScheduledTask();
+  }, 5000);
 }
 
 app.whenReady().then(() => {
@@ -486,84 +490,86 @@ ipcMain.handle('open-file-dialog', async (event, { title, filters }) => {
   }
 });
 
-// 5. System metrics calculation with real WMI query
+// 5. System metrics calculation with native Node APIs and netstat (0% CPU)
+let prevCpus = os.cpus();
 let prevNetBytes = 0;
 let prevNetTimestamp = Date.now();
 
-ipcMain.handle('get-system-metrics', async () => {
-  return new Promise((resolve) => {
-    const script = `
-      $ErrorActionPreference = 'SilentlyContinue'
-      $cpu = $null
-      try {
-        $cpu = (Get-WmiObject -Class Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average
-        if ($null -eq $cpu) {
-          $cpu = (Get-Counter "\\Processor(_Total)\\% Processor Time").CounterSamples[0].CookedValue
-        }
-      } catch {}
-      
-      $ramTotal = 0; $ramFree = 0
-      try {
-        $os = Get-WmiObject -Class Win32_OperatingSystem
-        $ramTotal = $os.TotalVisibleMemorySize
-        $ramFree = $os.FreePhysicalMemory
-      } catch {}
-      
-      $diskTotal = 0; $diskFree = 0
-      try {
-        $disk = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='C:'"
-        $diskTotal = $disk.Size
-        $diskFree = $disk.FreeSpace
-      } catch {}
-      
-      $netBytes = 0
-      try {
-        $netStats = Get-NetAdapterStatistics
-        if ($netStats) {
-          $netBytes = ($netStats | Measure-Object -Property ReceivedBytes, SentBytes -Sum | Measure-Object -Property Sum -Sum).Sum
-        }
-      } catch {}
-      
-      @{
-        cpu = if ($null -ne $cpu) { [Math]::Round($cpu, 1) } else { $null }
-        ram = if ($ramTotal -gt 0) { [Math]::Round((($ramTotal - $ramFree)/$ramTotal)*100, 1) } else { $null }
-        disk = if ($diskTotal -gt 0) { [Math]::Round((($diskTotal - $diskFree)/$diskTotal)*100, 1) } else { $null }
-        netBytes = $netBytes
-      } | ConvertTo-Json -Compress
-    `;
+function getCpuUsagePercent() {
+  const currentCpus = os.cpus();
+  let totalDiff = 0;
+  let idleDiff = 0;
+  
+  for (let i = 0; i < currentCpus.length; i++) {
+    const prev = prevCpus[i];
+    const curr = currentCpus[i];
+    if (!prev || !curr) continue;
+    
+    const prevTotal = prev.times.user + prev.times.nice + prev.times.sys + prev.times.idle + prev.times.irq;
+    const currTotal = curr.times.user + curr.times.nice + curr.times.sys + curr.times.idle + curr.times.irq;
+    
+    totalDiff += (currTotal - prevTotal);
+    idleDiff += (curr.times.idle - prev.times.idle);
+  }
+  
+  prevCpus = currentCpus;
+  if (totalDiff === 0) return 0;
+  return Math.round((1 - (idleDiff / totalDiff)) * 1000) / 10;
+}
 
-    exec(`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "${script.replace(/\n/g, ' ')}"`, (err, stdout) => {
-      if (err) {
-        resolve({ cpu: null, ram: null, disk: null, netSpeed: null, lastUpdated: new Date().toLocaleTimeString() });
-      } else {
-        try {
-          const metrics = JSON.parse(stdout.trim());
+ipcMain.handle('get-system-metrics', async () => {
+  const cpuPercent = getCpuUsagePercent();
+  
+  // RAM Usage
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const ramPercent = totalMem > 0 ? Math.round(((totalMem - freeMem) / totalMem) * 1000) / 10 : 0;
+  
+  // Disk Usage
+  let diskPercent = 50;
+  try {
+    const stats = fs.statfsSync('C:\\');
+    if (stats.blocks > 0) {
+      diskPercent = Math.round(((stats.blocks - stats.bfree) / stats.blocks) * 1000) / 10;
+    }
+  } catch (e) {
+    writeLog('WARN', 'Failed to retrieve native disk metrics: ' + e.message);
+  }
+  
+  // Network speed using fast netstat -e command
+  return new Promise((resolve) => {
+    exec('netstat -e', (err, stdout) => {
+      let netSpeed = 0;
+      const currentTimestamp = Date.now();
+      const timeDiffSeconds = (currentTimestamp - prevNetTimestamp) / 1000;
+      
+      if (!err && stdout) {
+        const lines = stdout.split('\n');
+        const bytesLine = lines.find(line => line.toLowerCase().includes('bytes'));
+        if (bytesLine) {
+          const parts = bytesLine.trim().split(/\s+/);
+          const received = parseInt(parts[1]) || 0;
+          const sent = parseInt(parts[2]) || 0;
+          const totalBytes = received + sent;
           
-          const currentTimestamp = Date.now();
-          const timeDiffSeconds = (currentTimestamp - prevNetTimestamp) / 1000;
-          let netSpeed = 0;
-          
-          if (prevNetBytes > 0 && timeDiffSeconds > 0 && metrics.netBytes !== undefined) {
-            const bytesDiff = metrics.netBytes - prevNetBytes;
+          if (prevNetBytes > 0 && timeDiffSeconds > 0) {
+            const bytesDiff = totalBytes - prevNetBytes;
             if (bytesDiff >= 0) {
               netSpeed = Math.round(bytesDiff / timeDiffSeconds);
             }
           }
-          
-          prevNetBytes = metrics.netBytes || 0;
-          prevNetTimestamp = currentTimestamp;
-          
-          resolve({
-            cpu: metrics.cpu,
-            ram: metrics.ram,
-            disk: metrics.disk,
-            netSpeed: netSpeed,
-            lastUpdated: new Date().toLocaleTimeString()
-          });
-        } catch {
-          resolve({ cpu: null, ram: null, disk: null, netSpeed: null, lastUpdated: new Date().toLocaleTimeString() });
+          prevNetBytes = totalBytes;
         }
       }
+      prevNetTimestamp = currentTimestamp;
+      
+      resolve({
+        cpu: cpuPercent,
+        ram: ramPercent,
+        disk: diskPercent,
+        netSpeed: netSpeed,
+        lastUpdated: new Date().toLocaleTimeString()
+      });
     });
   });
 });
@@ -574,9 +580,36 @@ function showSystemNotification(title, body) {
     const notification = new Notification({
       title,
       body,
-      icon: path.join(__dirname, 'dist', 'icon.png')
+      icon: path.join(__dirname, 'icon.png')
     });
     notification.show();
+  }
+}
+
+function checkBackgroundScheduledTask() {
+  try {
+    const scriptPath = getScriptPath('check_task_status.ps1');
+    const cmd = `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`;
+    exec(cmd, (err, stdout) => {
+      if (err) {
+        writeLog('WARN', 'Failed to check background scheduled task status: ' + err.message);
+        return;
+      }
+      try {
+        const status = JSON.parse(stdout.trim());
+        writeLog('INFO', `Scheduled task status check: Registered=${status.Registered}, State=${status.State || 'N/A'}`);
+        if (status.Registered && status.LastTaskResult !== 0 && status.LastTaskResult !== undefined && status.LastTaskResult !== 267009) {
+          showSystemNotification(
+            'Scheduled Care Alert',
+            `Background scheduled maintenance task finished with status error: ${status.LastTaskResult}.`
+          );
+        }
+      } catch(e) {
+        writeLog('ERROR', 'Error parsing scheduled task status output: ' + e.message);
+      }
+    });
+  } catch (e) {
+    writeLog('ERROR', 'Failed to locate check_task_status script: ' + e.message);
   }
 }
 

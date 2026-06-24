@@ -1,0 +1,218 @@
+<UserControl x:Class="SolasCareWpf.Views.SmartScanView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:local="clr-namespace:SolasCareWpf.Views"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="800">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        
+        <!-- Style to show only when NOT scanning and NOT completed (Initial) -->
+        <Style x:Key="VisibleInitialOnly" TargetType="FrameworkElement">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsScanning}" Value="False"/>
+                        <Condition Binding="{Binding IsCompleted}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Style to show when scanning OR fixing -->
+        <Style x:Key="VisibleWhenBusy" TargetType="FrameworkElement">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsScanning}" Value="True">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsFixing}" Value="True">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Style to show when scan is completed and NOT fixing -->
+        <Style x:Key="VisibleWhenCompleted" TargetType="FrameworkElement">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsCompleted}" Value="True"/>
+                        <Condition Binding="{Binding IsFixing}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="Transparent" Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="Smart Diagnostics Scan" Style="{StaticResource MaterialDesignHeadline4TextBlock}" Foreground="White" FontWeight="Bold" Margin="0,0,0,20"/>
+
+        <!-- MAIN WORKSPACE CONTENT -->
+        <Grid Grid.Row="1">
+            
+            <!-- 1. INITIAL STATE: READY TO SCAN -->
+            <StackPanel Style="{StaticResource VisibleInitialOnly}" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="20">
+                <materialDesign:PackIcon Kind="Magnify" Foreground="#8B5CF6" Width="96" Height="96" HorizontalAlignment="Center" Margin="0,0,0,24"/>
+                <TextBlock Text="Start a Smart Scan to inspect your PC" Foreground="White" FontWeight="Bold" FontSize="20" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                <TextBlock Text="We will scan registry invalid keys, privacy files, cookies tracker profiles, and junk file accumulations." 
+                           Foreground="#94A3B8" FontSize="14" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,0,0,24" MaxWidth="500" TextWrapping="Wrap"/>
+                <Button Style="{StaticResource MaterialDesignFlatMidPrimaryButton}"
+                        Command="{Binding StartScanCommand}"
+                        Background="#8B5CF6" BorderBrush="#8B5CF6" Foreground="White" Width="200" Height="44">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="Play" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Start Diagnosis" FontWeight="Bold" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <!-- 2. BUSY STATE: SCANNING OR REPAIRING IN PROGRESS -->
+            <Grid Style="{StaticResource VisibleWhenBusy}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Center circular loader and text -->
+                <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,10,0,20">
+                    <ProgressBar Style="{StaticResource MaterialDesignCircularProgressBar}" Value="0" IsIndeterminate="True" Width="80" Height="80" Foreground="#06B6D4" Margin="0,0,0,16"/>
+                    <TextBlock Text="{Binding ProgressText}" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                    <TextBlock Text="{Binding FixStatusText}" Foreground="#06B6D4" FontSize="14" HorizontalAlignment="Center" Visibility="{Binding IsFixing, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock Text="{Binding CurrentLogText}" Foreground="#94A3B8" FontSize="12" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Progress Bar -->
+                <ProgressBar Grid.Row="1" Value="{Binding ProgressValue}" Minimum="0" Maximum="100" Height="6" Foreground="#8B5CF6" Background="#334155" Margin="0,0,0,20"/>
+
+                <!-- Real-time scrollable log output terminal -->
+                <Border Grid.Row="2" Background="#0B0F19" BorderBrush="#334155" BorderThickness="1" CornerRadius="8" Padding="12">
+                    <ScrollViewer x:Name="LogScrollViewer" VerticalScrollBarVisibility="Auto">
+                        <TextBox Text="{Binding TerminalLogs, Mode=OneWay}"
+                                 Foreground="#34D399"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 FontFamily="Consolas"
+                                 FontSize="12"
+                                 IsReadOnly="True"
+                                 TextWrapping="Wrap"
+                                 AcceptsReturn="True"/>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+
+            <!-- 3. COMPLETED STATE: SCAN COMPLETED / RESULTS SHOWN -->
+            <Grid Style="{StaticResource VisibleWhenCompleted}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- List of scan categories -->
+                <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Scan Results &amp; Issues Found" Foreground="White" FontWeight="Bold" FontSize="16" Margin="0,0,0,12"/>
+                        
+                        <!-- Junk Files Item -->
+                        <Border Style="{StaticResource GlassPanelStyle}" Background="#1E293B" Padding="16,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <CheckBox Grid.Column="0" IsChecked="{Binding IsJunkChecked}" Command="{Binding UpdateResolveButtonTextCommand}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <materialDesign:PackIcon Grid.Column="1" Kind="TrashCan" Foreground="#F87171" Width="28" Height="28" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                    <TextBlock Text="Junk Files &amp; System Caches" Foreground="White" FontWeight="Bold" FontSize="14"/>
+                                    <TextBlock Text="Temporary windows cache files, memory dumps, and log files." Foreground="#94A3B8" FontSize="11"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="3" Text="{Binding JunkSizeText}" Foreground="#F87171" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" Margin="0,0,24,0"/>
+                                <Button Grid.Column="4" Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding CleanJunkCommand}" Content="Clean" BorderBrush="#F87171" Foreground="#F87171" Height="32"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Registry Errors Item -->
+                        <Border Style="{StaticResource GlassPanelStyle}" Background="#1E293B" Padding="16,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <CheckBox Grid.Column="0" IsChecked="{Binding IsRegistryChecked}" Command="{Binding UpdateResolveButtonTextCommand}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <materialDesign:PackIcon Grid.Column="1" Kind="FileCabinet" Foreground="#FBBF24" Width="28" Height="28" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                    <TextBlock Text="Broken Registry Keys" Foreground="White" FontWeight="Bold" FontSize="14"/>
+                                    <TextBlock Text="Orphaned uninstall pathways, file associations, and installer values." Foreground="#94A3B8" FontSize="11"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="3" Text="{Binding RegistryErrorsCount, StringFormat={}{0} errors}" Foreground="#FBBF24" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" Margin="0,0,24,0"/>
+                                <Button Grid.Column="4" Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding RepairRegistryCommand}" Content="Repair" BorderBrush="#FBBF24" Foreground="#FBBF24" Height="32"/>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource GlassPanelStyle}" Background="#1E293B" Padding="16,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <CheckBox Grid.Column="0" IsChecked="{Binding IsPrivacyChecked}" Command="{Binding UpdateResolveButtonTextCommand}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <materialDesign:PackIcon Grid.Column="1" Kind="ShieldAlert" Foreground="#06B6D4" Width="28" Height="28" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                    <TextBlock Text="Privacy Tracks &amp; Cookies" Foreground="White" FontWeight="Bold" FontSize="14"/>
+                                    <TextBlock Text="Recent file lists, MRU files tracking, and internet browsing cache profiles." Foreground="#94A3B8" FontSize="11"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="3" Text="{Binding PrivacyTracesCount, StringFormat={}{0} traces}" Foreground="#06B6D4" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" Margin="0,0,24,0"/>
+                                <Button Grid.Column="4" Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding ClearPrivacyCommand}" Content="Remove" BorderBrush="#06B6D4" Foreground="#06B6D4" Height="32"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Bottom Repair buttons -->
+                <Grid Grid.Row="1" Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <Button Grid.Column="0" Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding StartScanCommand}" Content="Rescan PC" BorderBrush="#94A3B8" Foreground="White" Height="44"/>
+                    
+                    <Button Grid.Column="2" Style="{StaticResource MaterialDesignFlatMidPrimaryButton}"
+                            Command="{Binding ResolveAllCommand}"
+                            Background="#8B5CF6" BorderBrush="#8B5CF6" Foreground="White"
+                            Height="44" Padding="24,0">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Wrench" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding ResolveButtonText}" FontWeight="Bold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Grid>
+
+        </Grid>
+    </Grid>
+</UserControl>

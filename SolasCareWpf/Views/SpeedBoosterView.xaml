@@ -1,0 +1,159 @@
+<UserControl x:Class="SolasCareWpf.Views.SpeedBoosterView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:local="clr-namespace:SolasCareWpf.Views"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="800">
+    <Grid Background="Transparent" Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header Row -->
+        <Grid Grid.Row="0" Margin="0,0,0,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Startup Apps Manager" Style="{StaticResource MaterialDesignHeadline4TextBlock}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding LoadStartupAppsCommand}" BorderBrush="#94A3B8" Foreground="White" Height="40" Margin="0,0,12,0">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="Refresh" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Refresh List" FontWeight="Bold" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource MaterialDesignFlatMidPrimaryButton}" Command="{Binding OptimizeStartupCommand}" Background="#06B6D4" BorderBrush="#06B6D4" Foreground="#0F172A" Height="40">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="RocketLaunch" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Optimize Boot" FontWeight="Bold" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- Status & Loader -->
+        <Grid Grid.Row="1" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="{Binding StatusText}" Foreground="#94A3B8" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+            <ProgressBar Grid.Column="1" Style="{StaticResource MaterialDesignCircularProgressBar}" IsIndeterminate="True" Value="0" Width="20" Height="20" Foreground="#06B6D4" Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" VerticalAlignment="Center"/>
+        </Grid>
+
+        <!-- Data Grid of Startup Apps -->
+        <Border Grid.Row="2" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="12" Padding="8">
+            <DataGrid ItemsSource="{Binding StartupApps}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      Background="Transparent"
+                      RowBackground="Transparent"
+                      BorderThickness="0"
+                      GridLinesVisibility="Horizontal"
+                      HorizontalGridLinesBrush="#334155"
+                      Foreground="White"
+                      HeadersVisibility="Column"
+                      RowHeaderWidth="0"
+                      SelectionMode="Single"
+                      IsReadOnly="True">
+                <DataGrid.Resources>
+                    <!-- Column Header Style -->
+                    <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Foreground" Value="#94A3B8"/>
+                        <Setter Property="FontWeight" Value="Bold"/>
+                        <Setter Property="Padding" Value="12,10"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                    </Style>
+                    <!-- DataGrid Cell style -->
+                    <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                        <Setter Property="Padding" Value="12,8"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                    </Style>
+                </DataGrid.Resources>
+                
+                <DataGrid.Columns>
+                    <!-- Name -->
+                    <DataGridTextColumn Header="Application Name" Binding="{Binding Name}" Width="160" ElementStyle="{StaticResource MaterialDesignBody1TextBlock}"/>
+
+                    <!-- Command Value -->
+                    <DataGridTextColumn Header="Launch Command" Binding="{Binding CommandValue}" Width="*" ElementStyle="{StaticResource MaterialDesignBody2TextBlock}"/>
+
+                    <!-- Registry RegistryPath -->
+                    <DataGridTextColumn Header="Location Registry" Binding="{Binding RegistryPath}" Width="200" ElementStyle="{StaticResource MaterialDesignBody2TextBlock}"/>
+
+                    <!-- Status Indicator -->
+                    <DataGridTemplateColumn Header="Boot Status" Width="100">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border Margin="4,2" Padding="8,4" CornerRadius="4" HorizontalAlignment="Left">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#334155"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEnabled}" Value="True">
+                                                    <Setter Property="Background" Value="#064E3B"/> <!-- bg-emerald-950/30 or similar -->
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                                    <Setter Property="Background" Value="#450A0A"/> <!-- bg-rose-950/30 or similar -->
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock VerticalAlignment="Center" FontWeight="Bold" FontSize="11">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="Disabled"/>
+                                                <Setter Property="Foreground" Value="#F87171"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsEnabled}" Value="True">
+                                                        <Setter Property="Text" Value="Enabled"/>
+                                                        <Setter Property="Foreground" Value="#34D399"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Actions -->
+                    <DataGridTemplateColumn Header="Action" Width="100">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Command="{Binding DataContext.ToggleStartupAppCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}"
+                                        Height="28" Padding="6,0" VerticalAlignment="Center">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+                                            <Setter Property="BorderBrush" Value="#8B5CF6"/>
+                                            <Setter Property="Foreground" Value="#8B5CF6"/>
+                                            <Setter Property="Content" Value="Disable"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                                    <Setter Property="BorderBrush" Value="#34D399"/>
+                                                    <Setter Property="Foreground" Value="#34D399"/>
+                                                    <Setter Property="Content" Value="Enable"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+    </Grid>
+</UserControl>

@@ -30,15 +30,25 @@ try {
             $temp = 38 # realistic fallback temperature
         }
 
+        $mediaTypeStr = "Unknown"
+        if ($pd.MediaType) {
+            $mediaTypeStr = $pd.MediaType.ToString()
+        }
+        
+        $opStatusStr = "OK"
+        if ($pd.OperationalStatus) {
+            $opStatusStr = [string]::Join(", ", $pd.OperationalStatus)
+        }
+
         $disks += [PSCustomObject]@{
             DeviceId       = $pd.DeviceId
             FriendlyName   = $pd.FriendlyName
-            MediaType      = $pd.MediaType.ToString()
+            MediaType      = $mediaTypeStr
             SizeGb         = [Math]::Round($pd.Size / 1GB, 1)
             SmartStatus    = if ($predictFailure) { "Failing" } else { "Healthy" }
             Temperature    = $temp
             WearPercentage = $wear
-            Operational    = $pd.OperationalStatus.ToString()
+            Operational    = $opStatusStr
         }
     }
 } catch {}

@@ -2,7 +2,8 @@
 param (
     [string]$Action = "scan", # scan, clean, undo, commit
     [string]$BackupDir = "",
-    [string]$FilesJson = "", # JSON list of paths to clean
+    [string]$FilesJson = "", # JSON list of paths to clean (fallback)
+    [string]$FilesPath = "", # JSON file path of paths to clean (main)
     [bool]$IncludeRecycleBin = $false
 )
 
@@ -61,8 +62,6 @@ function Get-JunkFiles {
             $shell = New-Object -ComObject Shell.Application
             $recycleBin = $shell.Namespace(0x0a)
             foreach ($item in $recycleBin.Items()) {
-                # Verify age if possible, or default to 5-minute check
-                # Since shell items can be files/folders, we retrieve details
                 $files += [PSCustomObject]@{
                     Path = $item.Path
                     Size = $item.Size
@@ -82,12 +81,17 @@ switch ($Action) {
     }
     
     "clean" {
-        if (-not $FilesJson) {
-            Write-Error "FilesJson is required for clean action."
+        $paths = @()
+        if ($FilesPath -and (Test-Path $FilesPath)) {
+            $paths = Get-Content $FilesPath -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
+            Remove-Item $FilesPath -Force -ErrorAction SilentlyContinue | Out-Null
+        } elseif ($FilesJson) {
+            $paths = $FilesJson | ConvertFrom-Json
+        } else {
+            Write-Error "FilesPath or FilesJson is required for clean action."
             exit 1
         }
         
-        $paths = $FilesJson | ConvertFrom-Json
         $backupTimestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         $backupPath = "$env:TEMP\SolasCareBackup_$backupTimestamp"
         New-Item -ItemType Directory -Path $backupPath | Out-Null
@@ -168,7 +172,6 @@ switch ($Action) {
             foreach ($item in $mapping) {
                 if (Test-Path $item.BackupPath) {
                     try {
-                        # Move to Recycle Bin natively
                         [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($item.BackupPath, 'OnlyErrorDialogs', 'SendToRecycleBin')
                     } catch {
                         Remove-Item $item.BackupPath -Force -ErrorAction SilentlyContinue
