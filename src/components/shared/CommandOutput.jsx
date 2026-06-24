@@ -68,55 +68,83 @@ export default function CommandOutput({
   };
 
   return (
-    <div className="glass-panel border border-brand-border rounded-xl p-4 space-y-3">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center text-xs border-b border-brand-border pb-2 gap-2 select-none">
+    <div className="glass-panel border border-brand-border/60 rounded-[18px] p-4 space-y-3 relative overflow-hidden bg-slate-950/20 shadow-2xl">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center text-xs border-b border-brand-border/40 pb-2.5 gap-2 select-none">
         <div className="flex items-center gap-2">
-          <Terminal className="h-4 w-4 text-slate-400" />
-          <span className="font-bold text-slate-200">{title}</span>
-          <span className="bg-slate-800 text-[10px] text-slate-400 font-bold px-1.5 py-0.5 rounded-full">
-            {logs.length} Lines
+          {/* Simulated Tab Header */}
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 border border-brand-border/40 rounded-t-lg border-b-0 -mb-3 text-[10px] font-bold text-slate-300">
+            <Terminal className="h-3 w-3 text-brand-cyan" />
+            <span>PowerShell</span>
+          </div>
+          <span className="text-[10px] text-slate-500 font-bold ml-2 shrink-0">{title}</span>
+          <span className="bg-slate-900/60 text-[9px] text-slate-400 font-bold px-2 py-0.5 rounded-full border border-brand-border/30">
+            {logs.length} lines
           </span>
         </div>
+        
+        {/* Controls */}
         <div className="flex gap-2">
           <button
             onClick={copyToClipboard}
-            className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+            className="px-2 py-1 hover:bg-slate-800 rounded border border-brand-border/40 hover:border-brand-violet text-[10px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer transition-all"
             title="Copy Logs"
           >
-            <Copy className="h-3.5 w-3.5" />
+            <Copy className="h-3 w-3" />
             <span>Copy</span>
           </button>
           <button
             onClick={handleClear}
-            className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+            className="px-2 py-1 hover:bg-slate-800 rounded border border-brand-border/40 hover:border-brand-violet text-[10px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer transition-all"
             title="Clear Console"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 className="h-3 w-3" />
             <span>Clear</span>
           </button>
           {isRunning && onCancel && (
             <button
               onClick={onCancel}
-              className="p-1 hover:bg-rose-950/40 rounded text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer"
+              className="px-2 py-1 bg-rose-950/40 hover:bg-rose-900 border border-rose-500/20 text-[10px] text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer transition-all"
               title="Cancel execution"
             >
-              <XCircle className="h-3.5 w-3.5" />
+              <XCircle className="h-3 w-3" />
               <span>Cancel</span>
             </button>
           )}
         </div>
       </div>
 
-      <div className="h-[300px] overflow-y-auto rounded-lg border border-slate-900 bg-black/50 p-4 font-mono text-[10px] leading-relaxed">
+      {/* Simulated Console Box */}
+      <div className="h-72 overflow-y-auto rounded-xl border border-slate-950 bg-black/80 p-4 font-mono text-[10px] leading-relaxed text-left shadow-inner custom-scrollbar relative select-text">
+        {/* Shell Greeting */}
+        <div className="text-slate-500 mb-3 select-none">
+          <p>Windows PowerShell</p>
+          <p>Copyright (C) Microsoft Corporation. All rights reserved.</p>
+          <p className="mt-1 text-[9px] text-brand-cyan/60">Try the new cross-platform PowerShell https://aka.ms/pscore6</p>
+        </div>
+
+        {/* Live Logs */}
         {logs.length > 0 ? (
-          logs.map((line, idx) => (
-            <p key={idx} className={getLineColorClass(line)}>
-              {line}
-            </p>
-          ))
+          <div className="space-y-0.5">
+            {logs.map((line, idx) => (
+              <p key={idx} className={getLineColorClass(line)}>
+                {line}
+              </p>
+            ))}
+          </div>
         ) : (
-          <p className="text-slate-600 italic">No output logged.</p>
+          <p className="text-slate-700 italic select-none">Console stream idle...</p>
         )}
+
+        {/* Dynamic Prompt Selector */}
+        <div className="mt-2 text-slate-500 flex items-center gap-1 select-none">
+          <span>PS C:\Windows\system32&gt;</span>
+          {isRunning ? (
+            <span className="w-1.5 h-3 bg-brand-cyan animate-ping inline-block"></span>
+          ) : (
+            <span className="w-1.5 h-3 bg-slate-500 animate-pulse inline-block"></span>
+          )}
+        </div>
+        
         <div ref={consoleEndRef} />
       </div>
     </div>
