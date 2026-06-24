@@ -13,9 +13,9 @@ export default {
           card: '#1E293B',     // Card base
           violet: '#8B5CF6',   // Electric Violet accent
           cyan: '#06B6D4',     // Cyan highlight
-          success: '#10B981',  // Emerald Green
-          warning: '#F59E0B',  // Amber Yellow
-          danger: '#EF4444',   // Rose Red
+          success: '#34D399',  // Emerald Green (emerald-400)
+          warning: '#FBBF24',  // Amber Yellow (amber-400)
+          danger: '#F87171',   // Rose Red (rose-400)
           border: '#334155',   // Subtle gray border
         }
       },

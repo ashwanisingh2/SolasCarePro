@@ -23,6 +23,7 @@ import AutoPilot from './components/AutoPilot';
 import FixMyProblem from './components/FixMyProblem';
 import QuickFix from './components/QuickFix';
 import SettingsView from './components/Settings';
+import PowerFeatures from './components/PowerFeatures';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -93,7 +94,7 @@ export default function App() {
       setActiveTab('power');
       setPowerSubTab(tabId);
     } else if (tabId === 'history' || tabId === 'logs') {
-      setActiveTab('logs');
+      setActiveTab('history');
     } else {
       setActiveTab(tabId);
     }
@@ -104,6 +105,7 @@ export default function App() {
     { id: 'core',         label: 'Core Repair',         icon: Wrench,           component: CoreRepair },
     { id: 'windows',      label: 'Windows',             icon: MonitorCheck,     component: WindowsHealth },
     { id: 'driver',       label: 'Drivers',             icon: Cpu,              component: DriverManager },
+    { id: 'power',        label: 'Power Features',      icon: Zap,              component: PowerFeatures },
     { id: 'network',      label: 'Network',             icon: Wifi,             component: NetworkMonitor },
     { id: 'hardware',     label: 'Hardware',            icon: CircuitBoard,     component: HardwareDiagnostics },
     { id: 'software',     label: 'Software',            icon: Package,          component: SoftwareUpdater },
@@ -129,6 +131,9 @@ export default function App() {
       }
       if (activeTab === 'settings') {
         return <Component theme={theme} setTheme={handleSetTheme} />;
+      }
+      if (activeTab === 'power') {
+        return <Component activeSubTab={powerSubTab} setActiveSubTab={handleSetActiveTab} />;
       }
       return <Component />;
     }
