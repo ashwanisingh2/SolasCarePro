@@ -1,79 +1,66 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip
 } from 'recharts';
 import { Network, Wifi, WifiOff, ArrowDown, ArrowUp } from 'lucide-react';
+import { useSystemMetrics } from '../context/SystemMetricsContext';
+import { formatBytesPerSec } from '../utils/helpers';
 
 export default function NetworkMonitor() {
+  const { systemMetrics } = useSystemMetrics();
   const [speedHistory, setSpeedHistory] = useState([]);
   const [networkInfo, setNetworkInfo] = useState({ download: 0, upload: 0, total: 0 });
   const [connectionStatus, setConnectionStatus] = useState('unknown');
-  const intervalRef = useRef(null);
-  const prevBytesRef = useRef({ received: 0, sent: 0, timestamp: 0 });
 
-  const fetchNetworkStats = useCallback(async () => {
-    try {
-      if (window.api) {
-        const metrics = await window.api.getSystemMetrics();
-        if (metrics && metrics.netSpeed !== null && metrics.netSpeed !== undefined) {
-          const timestamp = Date.now();
-          const prev = prevBytesRef.current;
-          const timeDiff = prev.timestamp ? (timestamp - prev.timestamp) / 1000 : 1;
-          const bytesPerSec = metrics.netSpeed;
-
-          const newPoint = {
-            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-            speed: Math.round(bytesPerSec / 1024) // KB/s
-          };
-
-          setSpeedHistory(prev => {
-            const updated = [...prev, newPoint];
-            return updated.slice(-30); // Keep last 30 points
-          });
-
-          setNetworkInfo(prev => ({
-            download: Math.round(bytesPerSec * 0.8),
-            upload: Math.round(bytesPerSec * 0.2),
-            total: bytesPerSec
-          }));
-
-          prevBytesRef.current = { received: bytesPerSec, sent: bytesPerSec, timestamp };
-        }
-
-        // Test connection
-        const connTest = await window.api.runSystemCommand('detect-network');
-        if (connTest.success) {
-          setConnectionStatus(connTest.exitCode === 0 ? 'connected' : 'disconnected');
-        } else {
-          setConnectionStatus('disconnected');
-        }
-      } else {
-        // Mock data
-        const mockSpeed = Math.floor(Math.random() * 5000) + 1000;
-        const newPoint = {
-          time: new Date().toLocaleTimeString(),
-          speed: mockSpeed
-        };
-        setSpeedHistory(prev => [...prev.slice(-29), newPoint]);
-        setNetworkInfo({ download: mockSpeed * 0.8, upload: mockSpeed * 0.2, total: mockSpeed });
-        setConnectionStatus('connected');
-      }
-    } catch (e) {
-      console.error('Failed to fetch network stats:', e);
-    }
-  }, []);
-
+  // Update speed history whenever new system metrics arrive
   useEffect(() => {
-    fetchNetworkStats();
-    intervalRef.current = setInterval(fetchNetworkStats, 2000);
-    return () => clearInterval(intervalRef.current);
-  }, [fetchNetworkStats]);
+    if (systemMetrics && systemMetrics.netSpeed !== undefined && systemMetrics.netSpeed !== null) {
+      const bytesPerSec = systemMetrics.netSpeed;
+      const timestamp = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      
+      const newPoint = {
+        time: timestamp,
+        speed: Math.round(bytesPerSec / 1024) // KB/s
+      };
 
-  const formatSpeed = (bytes) => {
-    if (bytes < 1024) return `${bytes} B/s`;
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB/s`;
-    return `${(bytes / 1048576).toFixed(2)} MB/s`;
-  };
+      setSpeedHistory(prev => {
+        const updated = [...prev, newPoint];
+        return updated.slice(-30); // Keep last 30 points
+      });
+
+      setNetworkInfo({
+        download: Math.round(bytesPerSec * 0.8),
+        upload: Math.round(bytesPerSec * 0.2),
+        total: bytesPerSec
+      });
+    }
+  }, [systemMetrics]);
+
+  // Check connectivity in a simple, low-frequency loop (every 10s)
+  useEffect(() => {
+    let active = true;
+    const checkConn = async () => {
+      try {
+        if (window.api) {
+          const connTest = await window.api.runSystemCommand('detect-network');
+          if (active) {
+            setConnectionStatus(connTest.success && connTest.exitCode === 0 ? 'connected' : 'disconnected');
+          }
+        } else {
+          if (active) setConnectionStatus('connected');
+        }
+      } catch (e) {
+        console.error('Failed to run connectivity check:', e);
+      }
+    };
+    
+    checkConn();
+    const interval = setInterval(checkConn, 10000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   return (
     <div className="p-6 space-y-6">
@@ -102,7 +89,7 @@ export default function NetworkMonitor() {
             </div>
             <span className="text-xs text-slate-400 font-bold uppercase">Download</span>
           </div>
-          <p className="text-2xl font-black text-emerald-400">{formatSpeed(networkInfo.download)}</p>
+          <p className="text-2xl font-black text-emerald-400">{formatBytesPerSec(networkInfo.download)}</p>
         </div>
 
         <div className="glass-panel border border-brand-border rounded-xl p-4">
@@ -112,7 +99,7 @@ export default function NetworkMonitor() {
             </div>
             <span className="text-xs text-slate-400 font-bold uppercase">Upload</span>
           </div>
-          <p className="text-2xl font-black text-blue-400">{formatSpeed(networkInfo.upload)}</p>
+          <p className="text-2xl font-black text-blue-400">{formatBytesPerSec(networkInfo.upload)}</p>
         </div>
 
         <div className="glass-panel border border-brand-border rounded-xl p-4">
@@ -122,7 +109,7 @@ export default function NetworkMonitor() {
             </div>
             <span className="text-xs text-slate-400 font-bold uppercase">Total</span>
           </div>
-          <p className="text-2xl font-black text-violet-400">{formatSpeed(networkInfo.total)}</p>
+          <p className="text-2xl font-black text-violet-400">{formatBytesPerSec(networkInfo.total)}</p>
         </div>
       </div>
 
@@ -156,3 +143,4 @@ export default function NetworkMonitor() {
     </div>
   );
 }
+

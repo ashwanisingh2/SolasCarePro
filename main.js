@@ -205,12 +205,28 @@ function checkPowerShellAccess() {
 function createTray() {
   if (tray) return;
   
-  // 1x1 Transparent pixel PNG base64 fallback
-  const iconBuffer = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
-    'base64'
-  );
-  const trayIcon = nativeImage.createFromBuffer(iconBuffer);
+  const iconPaths = [
+    path.join(__dirname, 'icon.png'),
+    path.join(__dirname, '../icon.png'),
+    path.join(app.getAppPath(), 'icon.png')
+  ];
+  
+  let trayIcon = null;
+  for (const p of iconPaths) {
+    if (fs.existsSync(p)) {
+      trayIcon = nativeImage.createFromPath(p);
+      break;
+    }
+  }
+  
+  if (!trayIcon) {
+    // 1x1 Transparent pixel PNG base64 fallback
+    const iconBuffer = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64'
+    );
+    trayIcon = nativeImage.createFromBuffer(iconBuffer);
+  }
   
   tray = new Tray(trayIcon);
   const contextMenu = Menu.buildFromTemplate([
@@ -343,7 +359,11 @@ async function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  // Start background task monitoring loop (checks every 60 seconds)
+  setInterval(checkBackgroundScheduledTask, 60000);
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -520,14 +540,7 @@ const ALLOWED_COMMANDS = {
     confirmationMessage: 'This will temporarily disconnect network adapters and reset socket settings. Continue?',
     buildArgs: ([ssid = '']) => ['-Action', 'reset', '-SSID', String(ssid).slice(0, 64)]
   },
-  'run-sfc-scan': {
-    type: 'powershell',
-    command: 'sfc /scannow',
-    timeout: 900000,
-    streamChannel: 'sfc-out',
-    confirmationRequired: true,
-    confirmationMessage: 'SFC can take 10-15 minutes. Do not interrupt the scan. Continue?'
-  },
+
   'run-trim': {
     type: 'script',
     script: 'run_trim.ps1',
@@ -699,10 +712,36 @@ const ALLOWED_COMMANDS = {
     confirmationMessage: 'This will clear app/browser-related Windows caches and reset Store cache. Continue?'
   },
   'repair-startup-cleanup': {
-    type: 'powershell',
-    command: 'Get-CimInstance Win32_StartupCommand | Select-Object Name,Command,Location | ConvertTo-Json -Compress',
+    type: 'script',
+    script: 'get_startup_apps.ps1',
     timeout: 30000,
     streamChannel: 'care-out'
+  },
+  'toggle-startup-app': {
+    type: 'script',
+    script: 'toggle_startup_app.ps1',
+    timeout: 15000,
+    streamChannel: 'care-out',
+    buildArgs: ([name, approvedPath, action]) => {
+      if (typeof name !== 'string' || typeof approvedPath !== 'string' || typeof action !== 'string') {
+        throw new Error('Invalid toggle parameters.');
+      }
+      return ['-Name', name, '-ApprovedPath', approvedPath, '-Action', action];
+    }
+  },
+  'check-windows-updates': {
+    type: 'script',
+    script: 'check_windows_updates.ps1',
+    timeout: 180000,
+    streamChannel: 'care-out'
+  },
+  'install-windows-updates': {
+    type: 'script',
+    script: 'install_windows_updates.ps1',
+    timeout: 1800000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will download and install pending Windows Updates. This can take a long time and may require a system restart. Continue?'
   },
   'repair-permissions': {
     type: 'powershell',
@@ -828,14 +867,7 @@ const ALLOWED_COMMANDS = {
     confirmationRequired: true,
     confirmationMessage: 'This will restore default security policy permissions. Continue?'
   },
-  'repair-file-permissions': {
-    type: 'powershell',
-    command: 'icacls "$env:SystemDrive\\Users" /verify /t /c',
-    timeout: 300000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will verify user file permissions recursively. Continue?'
-  },
+
   'repair-system-restore': {
     type: 'script',
     script: 'create_restore_point.ps1',
@@ -877,6 +909,36 @@ const ALLOWED_COMMANDS = {
     streamChannel: 'care-out',
     confirmationRequired: true,
     confirmationMessage: 'This will restart Windows audio services. Continue?'
+  },
+  'repair-audio-drivers': {
+    type: 'powershell',
+    command: 'Get-PnpDevice -Class System | Where-Object { $_.FriendlyName -match "Audio" } | Disable-PnpDevice -Confirm:$false; Get-PnpDevice -Class System | Where-Object { $_.FriendlyName -match "Audio" } | Enable-PnpDevice -Confirm:$false',
+    timeout: 60000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will disable and re-enable audio devices to reset their driver state. Continue?'
+  },
+  'network-ip-renew': {
+    type: 'powershell',
+    command: 'ipconfig /release; ipconfig /renew',
+    timeout: 60000,
+    streamChannel: 'care-out'
+  },
+  'network-adapter-restart': {
+    type: 'powershell',
+    command: 'Get-NetAdapter | Restart-NetAdapter',
+    timeout: 60000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will temporarily disable and re-enable all network adapters. Continue?'
+  },
+  'run-sfc-scan': {
+    type: 'powershell',
+    command: 'sfc /scannow',
+    timeout: 900000,
+    streamChannel: 'sfc-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will run System File Checker verification. Continue?'
   },
   'quick-explorer-fix': {
     type: 'powershell',
@@ -920,13 +982,13 @@ const ALLOWED_COMMANDS = {
   },
   'open-autoruns-manager': {
     type: 'powershell',
-    command: 'Start-Process taskmgr.exe',
+    command: 'try { Start-Process autoruns.exe -ErrorAction Stop } catch { Start-Process msconfig.exe }',
     timeout: 10000,
     streamChannel: 'care-out'
   },
   'open-startup-manager': {
     type: 'powershell',
-    command: 'Start-Process taskmgr.exe',
+    command: 'Start-Process "ms-settings:startupapps"',
     timeout: 10000,
     streamChannel: 'care-out'
   },
@@ -1059,9 +1121,10 @@ const ALLOWED_COMMANDS = {
   'scan-large-files': {
     type: 'powershell',
     timeout: 300000,
-    buildCommand: ([minSizeMb]) => {
+    buildCommand: ([minSizeMb, drive]) => {
       const size = parseInt(minSizeMb) || 100;
-      return `Get-ChildItem C:\\ -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Length -gt ${size} * 1MB -and -not $_.PSIsContainer } | Select-Object FullName, @{Name="Size";Expression={$_.Length}}, LastWriteTime | ConvertTo-Json -Compress`;
+      const cleanDrive = (typeof drive === 'string' && /^[A-Za-z]:?$/.test(drive)) ? drive.charAt(0) : 'C';
+      return `Get-ChildItem ${cleanDrive}:\\ -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Length -gt ${size} * 1MB -and -not $_.PSIsContainer } | Select-Object FullName, @{Name="Size";Expression={$_.Length}}, LastWriteTime | ConvertTo-Json -Compress`;
     }
   },
   'delete-files': {
@@ -1177,16 +1240,18 @@ function runChildProcess(executable, args, options = {}) {
   });
 }
 
-async function executeAllowedCommand(commandKey, rawArgs) {
+async function executeAllowedCommand(commandKey, rawArgs, options = {}) {
   const cmd = ALLOWED_COMMANDS[commandKey];
   if (!cmd) {
     throw new Error(`SECURITY: Command "${commandKey}" is not allowlisted.`);
   }
 
   const args = Array.isArray(rawArgs) ? rawArgs : [];
-  if (!(await confirmCommand(cmd))) {
+  if (!options.bypassConfirmation && !(await confirmCommand(cmd))) {
     return { success: false, cancelled: true, error: 'User cancelled operation.' };
   }
+
+  const streamChannel = options.streamChannel || cmd.streamChannel;
 
   if (cmd.type === 'native') {
     const nativeResult = await cmd.handler(args);
@@ -1201,7 +1266,7 @@ async function executeAllowedCommand(commandKey, rawArgs) {
       'Bypass',
       '-Command',
       command
-    ], { timeout: cmd.timeout, streamChannel: cmd.streamChannel });
+    ], { timeout: cmd.timeout, streamChannel });
   }
 
   const scriptArgs = cmd.buildArgs ? cmd.buildArgs(args) : [];
@@ -1213,13 +1278,13 @@ async function executeAllowedCommand(commandKey, rawArgs) {
     '-File',
     scriptPath,
     ...scriptArgs.map(String)
-  ], { timeout: cmd.timeout, streamChannel: cmd.streamChannel });
+  ], { timeout: cmd.timeout, streamChannel });
 }
 
-ipcMain.handle('run-system-command', async (event, commandKey, args = []) => {
+ipcMain.handle('run-system-command', async (event, commandKey, args = [], options = {}) => {
   try {
     writeLog('INFO', `Requested allowlisted command: ${commandKey}`);
-    const result = await executeAllowedCommand(commandKey, args);
+    const result = await executeAllowedCommand(commandKey, args, options);
     writeAudit(commandKey, { args }, result);
     return result;
   } catch (error) {
@@ -1295,8 +1360,14 @@ ipcMain.handle('set-setting', (event, { key, value }) => {
   return true;
 });
 
-ipcMain.handle('export-settings', async (event, filePath) => {
+ipcMain.handle('export-settings', async (event) => {
   try {
+    const { filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export Settings',
+      defaultPath: 'solas_settings_backup.json',
+      filters: [{ name: 'JSON Files', extensions: ['json'] }]
+    });
+    if (!filePath) return { cancelled: true };
     const data = fs.readFileSync(settingsStore.filePath, 'utf8');
     fs.writeFileSync(filePath, data, 'utf8');
     return { success: true };
@@ -1305,8 +1376,15 @@ ipcMain.handle('export-settings', async (event, filePath) => {
   }
 });
 
-ipcMain.handle('import-settings', async (event, filePath) => {
+ipcMain.handle('import-settings', async (event) => {
   try {
+    const { filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import Settings',
+      filters: [{ name: 'JSON Files', extensions: ['json'] }],
+      properties: ['openFile']
+    });
+    if (!filePaths || filePaths.length === 0) return { cancelled: true };
+    const filePath = filePaths[0];
     const data = fs.readFileSync(filePath, 'utf8');
     const parsed = JSON.parse(data);
     if (typeof parsed !== 'object' || parsed === null) throw new Error('Invalid format');
@@ -1401,3 +1479,43 @@ ipcMain.handle('get-system-metrics', async () => {
     });
   });
 });
+
+// 6. Background Scheduled Task Monitor and System Notifications
+function showSystemNotification(title, body) {
+  if (Notification.isSupported()) {
+    const notification = new Notification({
+      title,
+      body,
+      icon: path.join(__dirname, 'dist', 'icon.png')
+    });
+    notification.show();
+  }
+}
+
+ipcMain.on('show-notification', (event, { title, body }) => {
+  showSystemNotification(title, body);
+});
+
+let lastScheduledRunTime = null;
+
+async function checkBackgroundScheduledTask() {
+  try {
+    const result = await executeAllowedCommand('check-task-status', [], { bypassConfirmation: true });
+    if (result && result.success && result.stdout) {
+      const info = JSON.parse(result.stdout.trim());
+      if (info.Registered && info.LastRunTime && info.LastRunTime !== "N/A") {
+        if (lastScheduledRunTime === null) {
+          lastScheduledRunTime = info.LastRunTime;
+        } else if (lastScheduledRunTime !== info.LastRunTime) {
+          lastScheduledRunTime = info.LastRunTime;
+          showSystemNotification(
+            "Weekly Care Complete",
+            `Solas System Care Weekly automated task completed. Result: ${info.LastTaskResult === 0 ? "Success" : "Failed"}`
+          );
+        }
+      }
+    }
+  } catch (e) {
+    writeLog('ERROR', 'Error checking background scheduled task: ' + e.message);
+  }
+}

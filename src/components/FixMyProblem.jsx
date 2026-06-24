@@ -51,7 +51,7 @@ const issues = [
   ['Office not opening', FileWarning, 'detect-crashes', 'repair-office', 'repair-system-sfc'],
   ['Application not opening', FileWarning, 'detect-crashes', 'repair-system-sfc', 'repair-system-dism'],
   ['Missing DLL errors', FileWarning, 'detect-crashes', 'repair-system-sfc', 'repair-system-dism'],
-  ['Permission denied errors', LockKeyhole, 'detect-services', 'repair-file-permissions', 'repair-registry-permissions'],
+  ['Permission denied errors', LockKeyhole, 'detect-services', 'repair-permissions', 'repair-registry-permissions'],
   ['Administrator access issues', LockKeyhole, 'detect-services', 'repair-permissions', 'repair-registry-permissions'],
   ['Windows Defender not working', Shield, 'detect-services', 'repair-defender-service', 'repair-malware-cleanup'],
   ['Firewall issues', Shield, 'detect-services', 'repair-firewall-service', 'repair-network-full'],

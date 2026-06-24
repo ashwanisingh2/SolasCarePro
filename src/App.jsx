@@ -5,38 +5,22 @@ import {
   Sun, Moon, Cpu, Wifi, Clock, Battery, Eye, Trash2, BarChart3, Power
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+import { useTheme } from './context/ThemeContext';
 import SettingsView from './components/Settings';
-import PowerFeatures from './components/PowerFeatures';
 import RepairDashboard from './components/RepairDashboard';
-import FixMyProblem from './components/FixMyProblem';
 import ToolsHub from './components/ToolsHub';
 import LogsCenter from './components/LogsCenter';
-import PerformanceMode from './components/PerformanceMode';
-import NetworkMonitor from './components/NetworkMonitor';
-import StartupManager from './components/StartupManager';
-import RepairHistory from './components/RepairHistory';
-import BatterySaver from './components/BatterySaver';
-import PrivacyCleaner from './components/PrivacyCleaner';
-import LargeFileFinder from './components/LargeFileFinder';
-import QuickFix from './components/QuickFix';
+import OneClickCare from './components/OneClickCare';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [toolsSubTab, setToolsSubTab] = useState('dashboard');
   const [isAdmin, setIsAdmin] = useState(false);
   const [systemInfo, setSystemInfo] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [theme, setTheme] = useState(() => localStorage.getItem('solas-theme') || 'dark');
-  const [notifications, setNotifications] = useState([]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'light') {
-      root.classList.add('light-mode');
-    } else {
-      root.classList.remove('light-mode');
-    }
-    localStorage.setItem('solas-theme', theme);
-  }, [theme]);
+  
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     // Check administrator status and system info from Electron
@@ -60,63 +44,52 @@ export default function App() {
     initApp();
   }, []);
 
-  const addNotification = (title, message, type = 'info') => {
-    const id = Date.now();
-    setNotifications(prev => [...prev, { id, title, message, type }]);
-    setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== id));
-    }, 5000);
+  const handleSetActiveTab = (tabId) => {
+    if (tabId === 'fix') {
+      setActiveTab('tools');
+      setToolsSubTab('fix');
+    } else if (tabId === 'drivers') {
+      setActiveTab('tools');
+      setToolsSubTab('drivers');
+    } else if (tabId === 'power') {
+      setActiveTab('tools');
+      setToolsSubTab('performance');
+    } else if ([
+      'performance', 'network', 'startup', 'battery', 
+      'privacy', 'largefiles', 'quickfix'
+    ].includes(tabId)) {
+      setActiveTab('tools');
+      setToolsSubTab(tabId);
+    } else if (tabId === 'history') {
+      setActiveTab('tools');
+      setToolsSubTab('logs');
+    } else {
+      setActiveTab(tabId);
+    }
   };
 
   const navigation = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'quickfix', label: 'Quick Fixes', icon: Zap },
-    { id: 'fix', label: 'Fix My Problem', icon: LifeBuoy },
-    { id: 'performance', label: 'Performance', icon: Cpu },
-    { id: 'network', label: 'Network', icon: Wifi },
-    { id: 'startup', label: 'Startup', icon: Clock },
-    { id: 'battery', label: 'Battery', icon: Battery },
-    { id: 'privacy', label: 'Privacy', icon: Eye },
-    { id: 'largefiles', label: 'Large Files', icon: Trash2 },
-    { id: 'history', label: 'Repair History', icon: BarChart3 },
-    { id: 'power', label: 'Power Features', icon: Power },
-    { id: 'tools', label: 'Tools', icon: ClipboardList },
-    { id: 'logs', label: 'Logs', icon: FileText },
+    { id: 'care', label: 'One-Click Care', icon: ShieldCheck },
+    { id: 'tools', label: 'Tools Hub', icon: ClipboardList },
+    { id: 'logs', label: 'Logs Center', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <RepairDashboard setActiveTab={setActiveTab} />;
-      case 'quickfix':
-        return <QuickFix />;
-      case 'fix':
-        return <FixMyProblem />;
-      case 'performance':
-        return <PerformanceMode />;
-      case 'network':
-        return <NetworkMonitor />;
-      case 'startup':
-        return <StartupManager />;
-      case 'battery':
-        return <BatterySaver />;
-      case 'privacy':
-        return <PrivacyCleaner />;
-      case 'largefiles':
-        return <LargeFileFinder />;
-      case 'history':
-        return <RepairHistory />;
-      case 'power':
-        return <PowerFeatures />;
+        return <RepairDashboard setActiveTab={handleSetActiveTab} />;
+      case 'care':
+        return <OneClickCare />;
       case 'tools':
-        return <ToolsHub />;
+        return <ToolsHub activeSubTab={toolsSubTab} setActiveSubTab={setToolsSubTab} />;
       case 'logs':
         return <LogsCenter />;
       case 'settings':
-        return <SettingsView theme={theme} setTheme={setTheme} />;
+        return <SettingsView />;
       default:
-        return <RepairDashboard setActiveTab={setActiveTab} />;
+        return <RepairDashboard setActiveTab={handleSetActiveTab} />;
     }
   };
 
@@ -135,47 +108,8 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-brand-navy font-sans text-white transition-colors duration-300">
-      {/* Notifications */}
-      <AnimatePresence>
-        {notifications.length > 0 && (
-          <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
-            {notifications.map((notif) => (
-              <motion.div
-                key={notif.id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className={`glass-panel border rounded-xl p-4 shadow-lg flex items-start gap-3 ${
-                  notif.type === 'success' ? 'border-emerald-500/30 bg-emerald-950/20' :
-                  notif.type === 'error' ? 'border-rose-500/30 bg-rose-950/20' :
-                  notif.type === 'warning' ? 'border-amber-500/30 bg-amber-950/20' :
-                  'border-brand-violet/30 bg-brand-violet/10'
-                }`}
-              >
-                <div className="shrink-0 mt-0.5">
-                  {notif.type === 'success' && <span className="text-lg">✅</span>}
-                  {notif.type === 'error' && <span className="text-lg">❌</span>}
-                  {notif.type === 'warning' && <span className="text-lg">⚠️</span>}
-                  {notif.type === 'info' && <span className="text-lg">ℹ️</span>}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-slate-100">{notif.title}</p>
-                  <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{notif.message}</p>
-                </div>
-                <button
-                  onClick={() => setNotifications(prev => prev.filter(n => n.id !== notif.id))}
-                  className="shrink-0 text-slate-500 hover:text-white text-lg leading-none"
-                >
-                  ×
-                </button>
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </AnimatePresence>
-
       {/* Sidebar Navigation */}
-      <aside className="w-64 bg-slate-900 border-r border-brand-border flex flex-col justify-between p-4 select-none overflow-y-auto">
+      <aside className="w-64 bg-slate-900 border-r border-brand-border flex flex-col justify-between p-4 select-none overflow-y-auto shrink-0">
         <div>
           {/* Logo Section */}
           <div className="flex items-center gap-3 px-2 py-4 mb-6">
@@ -196,8 +130,8 @@ export default function App() {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                  onClick={() => handleSetActiveTab(item.id)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
                     isActive 
                       ? 'bg-gradient-to-r from-brand-violet/20 to-brand-cyan/10 border-l-4 border-brand-violet text-white shadow-md' 
                       : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -215,8 +149,8 @@ export default function App() {
         <div className="border-t border-brand-border pt-4 space-y-3">
           {/* Theme Toggle */}
           <button
-            onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all cursor-pointer"
           >
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             {theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'}
@@ -227,7 +161,7 @@ export default function App() {
             ) : (
               <ShieldAlert className="h-5 w-5 text-brand-danger shrink-0" />
             )}
-            <div className="truncate">
+            <div className="truncate text-left">
               <p className="text-[11px] font-bold text-slate-300">PRIVILEGES</p>
               <p className={`text-[10px] font-semibold ${isAdmin ? 'text-brand-success' : 'text-brand-danger'}`}>
                 {isAdmin ? 'Administrator Mode' : 'Standard User'}

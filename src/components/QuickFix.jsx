@@ -20,7 +20,7 @@ const QUICK_FIXES = [
     borderColor: 'border-pink-500/20',
     commands: [
       { name: 'Restart Audio Services', cmd: 'Restart-Service Audiosrv -Force; Restart-Service AudioEndpointBuilder -Force', key: 'quick-audio-fix' },
-      { name: 'Re-register Audio Drivers', cmd: 'Get-PnpDevice -Class System | Where-Object { $_.FriendlyName -match "Audio" } | Disable-PnpDevice -Confirm:$false; Get-PnpDevice -Class System | Where-Object { $_.FriendlyName -match "Audio" } | Enable-PnpDevice -Confirm:$false', key: null }
+      { name: 'Re-register Audio Drivers', cmd: 'Get-PnpDevice -Class System | Where-Object { $_.FriendlyName -match "Audio" } | Disable-PnpDevice -Confirm:$false; Get-PnpDevice -Class System | Where-Object { $_.FriendlyName -match "Audio" } | Enable-PnpDevice -Confirm:$false', key: 'repair-audio-drivers' }
     ]
   },
   {
@@ -34,8 +34,8 @@ const QUICK_FIXES = [
     borderColor: 'border-cyan-500/20',
     commands: [
       { name: 'Flush DNS & Reset Winsock', cmd: 'ipconfig /flushdns; netsh winsock reset; netsh int ip reset', key: 'quick-internet-fix' },
-      { name: 'Release & Renew IP', cmd: 'ipconfig /release; ipconfig /renew', key: null },
-      { name: 'Reset Network Adapter', cmd: 'Get-NetAdapter | Restart-NetAdapter', key: null }
+      { name: 'Release & Renew IP', cmd: 'ipconfig /release; ipconfig /renew', key: 'network-ip-renew' },
+      { name: 'Reset Network Adapter', cmd: 'Get-NetAdapter | Restart-NetAdapter', key: 'network-adapter-restart' }
     ]
   },
   {

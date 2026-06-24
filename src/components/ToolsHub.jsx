@@ -1,72 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Zap, Settings, Sun, Moon, Globe,
-  Bell, BellRing, BellOff, ShieldCheck, ShieldAlert,
+  Zap, Settings, Globe, ShieldCheck, ShieldAlert,
   Monitor, RefreshCw, Download, HardDrive, Network,
-  Cpu, HardDriveIcon as HardDriveFilled, Wifi, Battery, BatteryCharging,
-  Eye, EyeOff, Timer, CheckCircle2, XCircle, Play, Trash2,
-  BarChart3, Clock, FolderOpen, FileText, Terminal, Activity,
-  Search, AlertTriangle, Info, LayoutDashboard, LifeBuoy, ClipboardList,
-  ChevronLeft, ChevronRight
+  Cpu, HardDriveIcon as HardDriveFilled, Wifi, Battery,
+  Eye, Timer, CheckCircle2, XCircle, Play, Trash2,
+  Clock, FileText, LayoutDashboard, LifeBuoy, Wrench
 } from 'lucide-react';
+import { useSystemMetrics } from '../context/SystemMetricsContext';
+
 import QuickFix from './QuickFix';
 import NetworkMonitor from './NetworkMonitor';
 import StartupManager from './StartupManager';
-import RepairHistory from './RepairHistory';
+import LogsCenter from './LogsCenter';
 import BatterySaver from './BatterySaver';
 import PrivacyCleaner from './PrivacyCleaner';
 import LargeFileFinder from './LargeFileFinder';
 import PerformanceMode from './PerformanceMode';
+import DriverManager from './DriverManager';
+import SoftwareUpdater from './SoftwareUpdater';
+import FixMyProblem from './FixMyProblem';
 
-export default function ToolsHub() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [systemMetrics, setSystemMetrics] = useState(null);
-  const [loading, setLoading] = useState(true);
+export default function ToolsHub({ activeSubTab: propActiveTab, setActiveSubTab: propSetActiveTab }) {
+  const [internalActiveTab, setInternalActiveTab] = useState('dashboard');
+  const { systemMetrics, loading, refresh } = useSystemMetrics();
 
-  useEffect(() => {
-    loadMetrics();
-    const interval = setInterval(loadMetrics, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadMetrics = async () => {
-    try {
-      if (window.api) {
-        const metrics = await window.api.getSystemMetrics();
-        setSystemMetrics(metrics);
-      } else {
-        setSystemMetrics({
-          cpu: 34.5,
-          ram: 62.3,
-          disk: 48.7,
-          netSpeed: 1024000
-        });
-      }
-    } catch (e) {
-      console.error('Failed to load metrics:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const activeTab = propActiveTab || internalActiveTab;
+  const setActiveTab = propSetActiveTab || setInternalActiveTab;
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'quickfix', label: 'Quick Fixes', icon: Zap },
-    { id: 'performance', label: 'Performance', icon: Cpu },
-    { id: 'network', label: 'Network', icon: Wifi },
-    { id: 'startup', label: 'Startup', icon: Timer },
-    { id: 'battery', label: 'Battery', icon: Battery },
-    { id: 'privacy', label: 'Privacy', icon: Eye },
-    { id: 'largefiles', label: 'Large Files', icon: Trash2 },
-    { id: 'history', label: 'History', icon: Clock },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'fix', label: 'Guided Repair', icon: LifeBuoy },
+    { id: 'performance', label: 'Performance Mode', icon: Cpu },
+    { id: 'network', label: 'Network Monitor', icon: Wifi },
+    { id: 'startup', label: 'Startup Manager', icon: Timer },
+    { id: 'battery', label: 'Battery Saver', icon: Battery },
+    { id: 'privacy', label: 'Privacy Cleaner', icon: Eye },
+    { id: 'largefiles', label: 'Large File Finder', icon: Trash2 },
+    { id: 'drivers', label: 'Driver Manager', icon: HardDrive },
+    { id: 'updater', label: 'Software Updater', icon: RefreshCw },
+    { id: 'logs', label: 'Logs Center', icon: Clock },
   ];
 
   const renderContent = () => {
     switch (activeTab) {
       case 'quickfix':
         return <QuickFix />;
+      case 'fix':
+        return <FixMyProblem />;
       case 'performance':
         return <PerformanceMode />;
       case 'network':
@@ -79,10 +61,12 @@ export default function ToolsHub() {
         return <PrivacyCleaner />;
       case 'largefiles':
         return <LargeFileFinder />;
-      case 'history':
-        return <RepairHistory />;
-      case 'settings':
-        return <div className="p-6 text-center text-slate-400">Settings available in the main Settings tab</div>;
+      case 'drivers':
+        return <DriverManager />;
+      case 'updater':
+        return <SoftwareUpdater />;
+      case 'logs':
+        return <LogsCenter />;
       case 'dashboard':
       default:
         return (
@@ -116,13 +100,20 @@ export default function ToolsHub() {
             </div>
 
             {/* Quick Access Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               <ToolCard
                 title="Quick Fixes"
                 desc="One-click solutions for common problems"
                 icon={Zap}
                 color="violet"
                 onClick={() => setActiveTab('quickfix')}
+              />
+              <ToolCard
+                title="Guided Repair"
+                desc="Inspect system symptoms and apply targeted fixes"
+                icon={LifeBuoy}
+                color="orange"
+                onClick={() => setActiveTab('fix')}
               />
               <ToolCard
                 title="Performance Mode"
@@ -167,11 +158,25 @@ export default function ToolsHub() {
                 onClick={() => setActiveTab('largefiles')}
               />
               <ToolCard
-                title="Repair History"
-                desc="View past maintenance operations"
-                icon={Clock}
+                title="Driver Manager"
+                desc="Backup, restore and manage device drivers"
+                icon={HardDrive}
                 color="teal"
-                onClick={() => setActiveTab('history')}
+                onClick={() => setActiveTab('drivers')}
+              />
+              <ToolCard
+                title="Software Updater"
+                desc="Update installed software and system components"
+                icon={RefreshCw}
+                color="cyan"
+                onClick={() => setActiveTab('updater')}
+              />
+              <ToolCard
+                title="Logs Center"
+                desc="View past maintenance operations and diagnostics"
+                icon={Clock}
+                color="violet"
+                onClick={() => setActiveTab('logs')}
               />
             </div>
           </div>
@@ -183,18 +188,18 @@ export default function ToolsHub() {
   const Icon = currentTab?.icon || LayoutDashboard;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full text-left">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border select-none">
         <div className="flex items-center gap-3">
-          <Icon className="h-6 w-6 text-brand-violet" />
+          <Icon className="h-6 w-6 text-brand-violet animate-pulse" />
           <div>
             <h2 className="text-lg font-bold text-slate-200">{currentTab?.label || 'Tools Hub'}</h2>
             <p className="text-xs text-slate-400">System utilities and tools</p>
           </div>
         </div>
         <button
-          onClick={loadMetrics}
+          onClick={refresh}
           className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-brand-border rounded-lg text-xs font-bold text-slate-300 cursor-pointer flex items-center gap-2"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -205,7 +210,7 @@ export default function ToolsHub() {
       {/* Sidebar + Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <div className="w-48 bg-slate-900/50 border-r border-brand-border p-3 overflow-y-auto">
+        <div className="w-48 bg-slate-900/50 border-r border-brand-border p-3 overflow-y-auto shrink-0 select-none">
           {tabs.map(tab => {
             const TabIcon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -213,9 +218,9 @@ export default function ToolsHub() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-all mb-1 text-left ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-all mb-1 text-left cursor-pointer ${
                   isActive
-                    ? 'bg-brand-violet/20 text-brand-violet border-l-2 border-brand-violet'
+                    ? 'bg-brand-violet/20 text-brand-violet border-l-2 border-brand-violet font-bold'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                 }`}
               >
@@ -232,7 +237,7 @@ export default function ToolsHub() {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.2 }}
-          className="flex-1 overflow-y-auto"
+          className="flex-1 overflow-y-auto bg-slate-950/20"
         >
           {renderContent()}
         </motion.div>
@@ -250,8 +255,8 @@ function StatCard({ label, value, icon: Icon, color }) {
   };
 
   return (
-    <div className={`glass-panel border rounded-xl p-4 flex items-center gap-3`}>
-      <div className={`w-10 h-10 rounded-lg ${colors[color]} flex items-center justify-center`}>
+    <div className={`glass-panel border border-brand-border rounded-xl p-4 flex items-center gap-3 select-none`}>
+      <div className={`w-10 h-10 rounded-lg ${colors[color] || colors.violet} flex items-center justify-center`}>
         <Icon className="h-5 w-5" />
       </div>
       <div>
@@ -277,11 +282,12 @@ function ToolCard({ title, desc, icon: Icon, color, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`glass-panel border bg-gradient-to-br rounded-2xl p-6 text-left transition-all cursor-pointer group ${colors[color]}`}
+      className={`glass-panel border bg-gradient-to-br rounded-2xl p-6 text-left transition-all cursor-pointer group ${colors[color] || colors.violet}`}
     >
       <Icon className="h-7 w-7 mb-3 group-hover:scale-110 transition-transform" />
       <h4 className="text-sm font-bold text-slate-200 mb-1">{title}</h4>
-      <p className="text-[10px] text-slate-400">{desc}</p>
+      <p className="text-[10px] text-slate-400 leading-normal">{desc}</p>
     </button>
   );
 }
+

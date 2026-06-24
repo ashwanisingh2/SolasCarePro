@@ -21,64 +21,109 @@ export default function StartupManager() {
         const res = await window.api.runSystemCommand('repair-startup-cleanup');
         if (res.success && res.stdout) {
           const apps = JSON.parse(res.stdout.trim());
-          setStartupApps(apps.map((app, i) => ({
+          const list = Array.isArray(apps) ? apps : [apps];
+          setStartupApps(list.map((app, i) => ({
             ...app,
             id: i,
-            enabled: true,
             impact: getImpactLevel(app.Name)
           })));
+        } else {
+          setMockApps();
         }
       } else {
-        // Mock data
-        await new Promise(r => setTimeout(r, 1000));
-        setStartupApps([
-          { id: 0, name: 'Microsoft Teams', location: 'HKCU\\...\\Run', command: 'C:\\Program Files\\...', impact: 'High', enabled: true },
-          { id: 1, name: 'OneDrive', location: 'HKLM\\...\\Run', command: 'C:\\Users\\...', impact: 'Medium', enabled: true },
-          { id: 2, name: 'Spotify', location: 'HKCU\\...\\Run', command: 'C:\\Users\\AppData\\...', impact: 'Low', enabled: true },
-          { id: 3, name: 'Discord', location: 'HKCU\\...\\Run', command: 'C:\\Users\\AppData\\...', impact: 'Medium', enabled: true },
-          { id: 4, name: 'Windows Defender', location: 'HKLM\\...\\Run', command: 'C:\\Program Files\\...', impact: 'High', enabled: true },
-          { id: 5, name: 'Google Update', location: 'HKLM\\...\\Run', command: 'C:\\Program Files\\...', impact: 'Low', enabled: true }
-        ]);
+        setMockApps();
       }
     } catch (e) {
       console.error('Failed to load startup apps:', e);
+      setMockApps();
     } finally {
       setLoading(false);
     }
   };
 
+  const setMockApps = () => {
+    setStartupApps([
+      { id: 0, Name: 'Microsoft Teams', Location: 'HKCU\\...\\Run', ApprovedPath: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run', Command: 'C:\\Program Files\\...', impact: 'High', Enabled: true },
+      { id: 1, Name: 'OneDrive', Location: 'HKLM\\...\\Run', ApprovedPath: 'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run', Command: 'C:\\Users\\...', impact: 'Medium', Enabled: true },
+      { id: 2, Name: 'Spotify', Location: 'HKCU\\...\\Run', ApprovedPath: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run', Command: 'C:\\Users\\AppData\\...', impact: 'Low', Enabled: true },
+      { id: 3, Name: 'Discord', Location: 'HKCU\\...\\Run', ApprovedPath: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run', Command: 'C:\\Users\\AppData\\...', impact: 'Medium', Enabled: false },
+      { id: 4, Name: 'Windows Defender', Location: 'HKLM\\...\\Run', ApprovedPath: 'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run', Command: 'C:\\Program Files\\...', impact: 'High', Enabled: true },
+      { id: 5, Name: 'Google Update', Location: 'HKLM\\...\\Run', ApprovedPath: 'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run', Command: 'C:\\Program Files\\...', impact: 'Low', Enabled: true }
+    ]);
+  };
+
   const getImpactLevel = (name) => {
-    const nameLower = name?.toLowerCase() || '';
+    const nameLower = String(name || '').toLowerCase();
     if (nameLower.includes('defender') || nameLower.includes('antivirus') || nameLower.includes('security')) return 'High';
-    if (nameLower.includes('teams') || nameLower.includes('discord') || nameLower.includes('zoom')) return 'Medium';
+    if (nameLower.includes('teams') || nameLower.includes('discord') || nameLower.includes('zoom') || nameLower.includes('spotify')) return 'Medium';
     return 'Low';
   };
 
-  const toggleApp = (id) => {
+  const toggleApp = async (id, name, approvedPath, currentEnabled) => {
+    const action = currentEnabled ? 'disable' : 'enable';
+    
+    // Optimistic UI update
     setStartupApps(prev =>
-      prev.map(app => app.id === id ? { ...app, enabled: !app.enabled } : app)
+      prev.map(app => app.id === id ? { ...app, Enabled: !currentEnabled } : app)
     );
+
+    if (window.api) {
+      try {
+        const res = await window.api.runSystemCommand('toggle-startup-app', [name, approvedPath, action]);
+        if (!res.success) {
+          // Revert UI on failure
+          setStartupApps(prev =>
+            prev.map(app => app.id === id ? { ...app, Enabled: currentEnabled } : app)
+          );
+          alert(`Failed to update startup setting: ${res.error || 'Access Denied'}`);
+        }
+      } catch (err) {
+        console.error('Toggle startup failed:', err);
+        setStartupApps(prev =>
+          prev.map(app => app.id === id ? { ...app, Enabled: currentEnabled } : app)
+        );
+      }
+    }
   };
 
-  const disableAllNonEssential = () => {
+  const disableAllNonEssential = async () => {
+    const nonEssential = startupApps.filter(app => {
+      const isEssential = app.Name.toLowerCase().includes('defender') || app.Name.toLowerCase().includes('security');
+      return !isEssential && app.Enabled;
+    });
+
+    if (nonEssential.length === 0) return;
+
+    // Optimistic UI update
     setStartupApps(prev =>
       prev.map(app => {
-        if (app.name.includes('Defender') || app.name.includes('Security')) return app;
-        return { ...app, enabled: false };
+        const isEssential = app.Name.toLowerCase().includes('defender') || app.Name.toLowerCase().includes('security');
+        if (isEssential) return app;
+        return { ...app, Enabled: false };
       })
     );
+
+    if (window.api) {
+      try {
+        for (const app of nonEssential) {
+          await window.api.runSystemCommand('toggle-startup-app', [app.Name, app.ApprovedPath, 'disable']);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
   };
 
-  const enabledCount = startupApps.filter(a => a.enabled).length;
-  const disabledCount = startupApps.filter(a => !a.enabled).length;
+  const enabledCount = startupApps.filter(a => a.Enabled).length;
+  const disabledCount = startupApps.filter(a => !a.Enabled).length;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 text-left">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-xl font-bold text-slate-200">Startup Manager</h2>
-          <p className="text-xs text-slate-400">Control which apps run at system startup</p>
+          <p className="text-xs text-slate-400">Control which applications run automatically at Windows logon</p>
         </div>
         <button
           onClick={loadStartupApps}
@@ -90,7 +135,7 @@ export default function StartupManager() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 select-none">
         <div className="glass-panel border border-brand-border rounded-xl p-4 flex items-center justify-between">
           <div>
             <h4 className="text-xs text-slate-400 font-bold uppercase">Total Apps</h4>
@@ -115,12 +160,12 @@ export default function StartupManager() {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-3">
+      <div className="flex gap-3 select-none">
         <button
           onClick={disableAllNonEssential}
-          className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-xs font-bold rounded-lg text-white cursor-pointer"
+          className="px-4 py-2 bg-brand-violet hover:bg-brand-violet/80 text-xs font-bold rounded-lg text-white cursor-pointer"
         >
-          Disable Non-Essential
+          Disable All Non-Essential
         </button>
       </div>
 
@@ -157,9 +202,9 @@ export default function StartupManager() {
                   </div>
 
                   <div>
-                    <h4 className="text-sm font-bold text-slate-200">{app.name}</h4>
-                    <p className="text-[10px] text-slate-500 mt-0.5 font-mono truncate max-w-xs">
-                      {app.command}
+                    <h4 className="text-sm font-bold text-slate-200">{app.Name}</h4>
+                    <p className="text-[10px] text-slate-500 mt-0.5 font-mono truncate max-w-xs md:max-w-md">
+                      {app.Command}
                     </p>
                   </div>
                 </div>
@@ -174,14 +219,17 @@ export default function StartupManager() {
                   </span>
 
                   <button
-                    onClick={(e) => { e.stopPropagation(); toggleApp(app.id); }}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${
-                      app.enabled ? 'bg-brand-violet' : 'bg-slate-700'
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      toggleApp(app.id, app.Name, app.ApprovedPath, app.Enabled); 
+                    }}
+                    className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer ${
+                      app.Enabled ? 'bg-brand-violet' : 'bg-slate-700'
                     }`}
                   >
                     <span
                       className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-                        app.enabled ? 'translate-x-6' : 'translate-x-0'
+                        app.Enabled ? 'translate-x-6' : 'translate-x-0'
                       }`}
                     />
                   </button>
@@ -190,14 +238,14 @@ export default function StartupManager() {
 
               {expandedApp === app.id && (
                 <div className="border-t border-brand-border p-4 bg-slate-950/40 space-y-3">
-                  <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                     <div>
-                      <span className="text-slate-500 block mb-1">Location</span>
-                      <span className="text-slate-300 font-mono">{app.location}</span>
+                      <span className="text-slate-500 block mb-1">Target Key / Folder location</span>
+                      <span className="text-slate-300 font-mono break-all">{app.Location}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 block mb-1">Command</span>
-                      <span className="text-slate-300 font-mono truncate block">{app.command}</span>
+                      <span className="text-slate-500 block mb-1">Full Executable Command</span>
+                      <span className="text-slate-300 font-mono break-all">{app.Command}</span>
                     </div>
                   </div>
                 </div>

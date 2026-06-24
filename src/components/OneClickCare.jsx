@@ -4,7 +4,7 @@ import {
   FolderOpen, Network, Shield, HardDrive, Terminal, AlertTriangle, Play
 } from 'lucide-react';
 
-export default function OneClickCare() {
+function OneClickCare() {
   const [currentStep, setCurrentStep] = useState('idle'); // idle, restore, restore-failed, junk-scan, junk-preview, junk-undo, network-check, network-warn, network-run, sfc, trim, security, complete
   const [logs, setLogs] = useState([]);
   const [progress, setProgress] = useState(0);
@@ -62,18 +62,29 @@ export default function OneClickCare() {
     // Listen to SFC stream
     if (window.api && window.api.onStream) {
       unsubscribeRef.current = window.api.onStream('sfc-out', (data) => {
-        setSfcLogs(prev => {
-          const newLogs = [...prev, ...data.split('\n')];
-          data.split('\n').forEach(line => {
-            const match = line.match(/Verification\s+(\d+)%\s+complete/i) || line.match(/(\d+)%\s+complete/i) || line.match(/Verification\s+(\d+)%/i);
-            if (match && match[1]) {
-              const p = parseInt(match[1]);
-              setSfcProgress(p);
-              setProgress(65 + Math.round(p * 0.15));
-            }
+        try {
+          if (typeof data !== 'string') return;
+          setSfcLogs(prev => {
+            const newLogs = [...prev, ...data.split('\n')];
+            data.split('\n').forEach(line => {
+              try {
+                const match = line.match(/Verification\s+(\d+)%\s+complete/i) || line.match(/(\d+)%\s+complete/i) || line.match(/Verification\s+(\d+)%/i);
+                if (match && match[1]) {
+                  const p = parseInt(match[1]);
+                  if (!isNaN(p)) {
+                    setSfcProgress(p);
+                    setProgress(65 + Math.round(p * 0.15));
+                  }
+                }
+              } catch (innerErr) {
+                console.error('Error parsing line in sfc-out:', innerErr);
+              }
+            });
+            return newLogs;
           });
-          return newLogs;
-        });
+        } catch (err) {
+          console.error('Error in sfc-out stream listener:', err);
+        }
       });
     }
     return () => {
@@ -391,9 +402,14 @@ export default function OneClickCare() {
     let unsubscribe = null;
     if (window.api && window.api.onStream) {
       unsubscribe = window.api.onStream('care-out', (data) => {
-        if (data.includes('Resetting...')) setNetworkProgressText('Resetting... socket catalogs flushed.');
-        if (data.includes('Reconnecting...')) setNetworkProgressText('Reconnecting... power cycling network adapters.');
-        if (data.includes('Connected!')) setNetworkProgressText('Connected! Internet link is back.');
+        try {
+          if (typeof data !== 'string') return;
+          if (data.includes('Resetting...')) setNetworkProgressText('Resetting... socket catalogs flushed.');
+          if (data.includes('Reconnecting...')) setNetworkProgressText('Reconnecting... power cycling network adapters.');
+          if (data.includes('Connected!')) setNetworkProgressText('Connected! Internet link is back.');
+        } catch (err) {
+          console.error('Error in care-out stream listener:', err);
+        }
       });
     }
 
@@ -1148,3 +1164,48 @@ export default function OneClickCare() {
     </div>
   );
 }
+
+// React Error Boundary for OneClickCare
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error in OneClickCare:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 bg-rose-950/20 border border-rose-500/30 rounded-2xl m-6 text-left space-y-4">
+          <h2 className="text-lg font-black text-rose-300">Something went wrong with the Care Flow</h2>
+          <p className="text-xs text-slate-400">An unexpected error occurred during execution. You can try restarting the care flow.</p>
+          <div className="bg-black/40 border border-slate-800 rounded-xl p-4 font-mono text-[10px] text-rose-400 max-h-[200px] overflow-y-auto">
+            {this.state.error?.toString()}
+          </div>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white rounded-xl cursor-pointer"
+          >
+            Reset Component
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const SafeOneClickCare = () => (
+  <ErrorBoundary>
+    <OneClickCare />
+  </ErrorBoundary>
+);
+
+export default SafeOneClickCare;

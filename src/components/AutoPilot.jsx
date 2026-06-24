@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Calendar, Clock, ShieldCheck, RefreshCw, CheckCircle, 
   Trash2, Search, ArrowUpCircle, Wifi, Zap
 } from 'lucide-react';
+import { useNotification } from '../context/NotificationContext';
 
 export default function AutoPilot() {
+  const { addNotification } = useNotification();
   const [enabled, setEnabled] = useState(false);
   const [selectedDay, setSelectedDay] = useState('Sunday');
   const [selectedTime, setSelectedTime] = useState('03:00');
@@ -21,6 +23,28 @@ export default function AutoPilot() {
   // Live Task status information
   const [taskInfo, setTaskInfo] = useState({ registered: false, state: 'N/A', lastRun: 'N/A', result: 'N/A', highest: false });
   const [testingTask, setTestingTask] = useState(false);
+  const prevTaskInfoRef = useRef(null);
+
+  // Monitor task status changes to send completion notifications
+  useEffect(() => {
+    if (prevTaskInfoRef.current) {
+      const prev = prevTaskInfoRef.current;
+      if (taskInfo.lastRun !== 'N/A' && prev.lastRun !== 'N/A' && taskInfo.lastRun !== prev.lastRun) {
+        addNotification(
+          'Auto-Pilot Task Completed',
+          `Automated weekly maintenance task finished with result: ${taskInfo.result}`,
+          taskInfo.result === 'Success' ? 'success' : 'error'
+        );
+      } else if (prev.state === 'Running' && taskInfo.state === 'Ready') {
+        addNotification(
+          'Auto-Pilot Task Completed',
+          `Automated weekly maintenance task completed successfully.`,
+          'success'
+        );
+      }
+    }
+    prevTaskInfoRef.current = taskInfo;
+  }, [taskInfo, addNotification]);
 
   const checkTaskStatus = async () => {
     try {
