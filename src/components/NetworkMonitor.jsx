@@ -4,7 +4,7 @@ import {
 } from 'recharts';
 import { Network, Wifi, WifiOff, ArrowDown, ArrowUp } from 'lucide-react';
 import { useSystemMetrics } from '../context/SystemMetricsContext';
-import { formatBytesPerSec } from '../utils/helpers';
+import { formatBytesPerSec } from '../utils/formatters';
 
 export default function NetworkMonitor() {
   const { systemMetrics } = useSystemMetrics();

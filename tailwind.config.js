@@ -20,7 +20,8 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Inter', 'Segoe UI', 'sans-serif'],
+        sans: ['Outfit', 'Inter', 'Segoe UI', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Fira Code', 'Courier New', 'monospace'],
       }
     },
   },

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Download, RefreshCw, Terminal, CheckCircle2, 
-  AlertTriangle, Square, Play, XCircle, Settings2, Laptop, AppWindow
+  CheckCircle, AlertTriangle, RefreshCw, XCircle, Terminal, 
+  Settings2, ArrowUpCircle, ExternalLink, RefreshCw as UpdateIcon
 } from 'lucide-react';
+import { useNotification } from '../context/NotificationContext';
+import CommandOutput from './shared/CommandOutput';
 
 export default function SoftwareUpdater() {
   const [subMode, setSubMode] = useState('apps'); // 'apps' or 'windows'
@@ -57,7 +59,9 @@ export default function SoftwareUpdater() {
       unsubWinget = window.api.onStream('winget-out', (data) => {
         try {
           if (typeof data === 'string') {
-            setTerminalLogs(prev => [...prev, ...data.split('\n').filter(Boolean)]);
+            const time = new Date().toLocaleTimeString(undefined, { hour12: false });
+            const lines = data.split('\n').filter(Boolean).map(line => `[${time}] ${line}`);
+            setTerminalLogs(prev => [...prev, ...lines]);
           }
         } catch (e) {
           console.error('Error handling winget-out stream:', e);
@@ -67,7 +71,9 @@ export default function SoftwareUpdater() {
       unsubCare = window.api.onStream('care-out', (data) => {
         try {
           if (typeof data === 'string') {
-            setTerminalLogs(prev => [...prev, ...data.split('\n').filter(Boolean)]);
+            const time = new Date().toLocaleTimeString(undefined, { hour12: false });
+            const lines = data.split('\n').filter(Boolean).map(line => `[${time}] ${line}`);
+            setTerminalLogs(prev => [...prev, ...lines]);
           }
         } catch (e) {
           console.error('Error handling care-out stream:', e);
@@ -180,20 +186,21 @@ export default function SoftwareUpdater() {
     if (subMode === 'apps') {
       if (selectedIds.length === 0) return;
       setUpdating(true);
-      setTerminalLogs(['[SYSTEM] Starting automated silent software installations...', '']);
+      setTerminalLogs([]);
+      addLogs('[SYSTEM] Starting automated silent software installations...');
       
       try {
         for (const id of selectedIds) {
-          setTerminalLogs(prev => [...prev, `[SYSTEM] Upgrading package: ${id}...`]);
+          addLogs(`[SYSTEM] Upgrading package: ${id}...`);
           setPackageStatuses(prev => ({ ...prev, [id]: 'updating' }));
           
           if (window.api) {
             const res = await window.api.runSystemCommand('update-software', [id]);
             if (res.success) {
-              setTerminalLogs(prev => [...prev, `[SYSTEM] Successfully upgraded package: ${id}`, '']);
+              addLogs(`[SYSTEM] Successfully upgraded package: ${id}`);
               setPackageStatuses(prev => ({ ...prev, [id]: 'success' }));
             } else {
-              setTerminalLogs(prev => [...prev, `[ERROR] Package upgrade failed: ${id}`, '']);
+              addLogs(`[ERROR] Package upgrade failed: ${id}`);
               setPackageStatuses(prev => ({ ...prev, [id]: 'failed' }));
               if (res.stdout && res.stdout.includes('-2147012851')) {
                 setHasNetworkError(true);
@@ -201,24 +208,25 @@ export default function SoftwareUpdater() {
             }
           } else {
             await new Promise(r => setTimeout(r, 1500));
-            setTerminalLogs(prev => [...prev, `[SYSTEM] (Mock) Successfully upgraded: ${id}`, '']);
+            addLogs(`[SYSTEM] (Mock) Successfully upgraded: ${id}`);
             setPackageStatuses(prev => ({ ...prev, [id]: 'success' }));
           }
         }
         setSelectedIds([]);
         setStatusMessage('Upgrades execution finished.');
       } catch (err) {
-        setTerminalLogs(prev => [...prev, `[ERROR] Error: ${err.message}`]);
+        addLogs(`[ERROR] Error: ${err.message}`);
       } finally {
         setUpdating(false);
       }
     } else {
       if (selectedWinIds.length === 0) return;
       setUpdating(true);
-      setTerminalLogs(['[SYSTEM] Initializing Windows Update session...', '']);
+      setTerminalLogs([]);
+      addLogs('[SYSTEM] Initializing Windows Update session...');
 
       try {
-        setTerminalLogs(prev => [...prev, '[SYSTEM] Downloading and installing pending Windows updates...']);
+        addLogs('[SYSTEM] Downloading and installing pending Windows updates...');
         winUpdates.forEach(u => {
           const id = u.KBArticleIDs;
           if (selectedWinIds.includes(id)) {
@@ -229,7 +237,7 @@ export default function SoftwareUpdater() {
         if (window.api) {
           const res = await window.api.runSystemCommand('install-windows-updates');
           if (res.success) {
-            setTerminalLogs(prev => [...prev, '[SYSTEM] Windows Update cycle executed successfully. Please review status logs.', '']);
+            addLogs('[SYSTEM] Windows Update cycle executed successfully. Please review status logs.');
             winUpdates.forEach(u => {
               const id = u.KBArticleIDs;
               if (selectedWinIds.includes(id)) {
@@ -237,7 +245,7 @@ export default function SoftwareUpdater() {
               }
             });
           } else {
-            setTerminalLogs(prev => [...prev, `[ERROR] Windows Update installation failed: ${res.error || res.stderr}`, '']);
+            addLogs(`[ERROR] Windows Update installation failed: ${res.error || res.stderr}`);
             winUpdates.forEach(u => {
               const id = u.KBArticleIDs;
               if (selectedWinIds.includes(id)) {
@@ -247,7 +255,7 @@ export default function SoftwareUpdater() {
           }
         } else {
           await new Promise(r => setTimeout(r, 3000));
-          setTerminalLogs(prev => [...prev, '[SYSTEM] (Mock) Windows Updates successfully installed.', '']);
+          addLogs('[SYSTEM] (Mock) Windows Updates successfully installed.');
           winUpdates.forEach(u => {
             const id = u.KBArticleIDs;
             if (selectedWinIds.includes(id)) {
@@ -258,7 +266,7 @@ export default function SoftwareUpdater() {
         setSelectedWinIds([]);
         setStatusMessage('Windows Updates installation cycle finished.');
       } catch (err) {
-        setTerminalLogs(prev => [...prev, `[ERROR] Error installing Windows updates: ${err.message}`]);
+        addLogs(`[ERROR] Error installing Windows updates: ${err.message}`);
       } finally {
         setUpdating(false);
       }
@@ -267,24 +275,24 @@ export default function SoftwareUpdater() {
 
   const handleRepairWingetNetwork = async () => {
     setUpdating(true);
-    setTerminalLogs(prev => [...prev, '[SYSTEM] Starting network and Winget source repair...', '']);
+    addLogs('[SYSTEM] Starting network and Winget source repair...');
     try {
       if (window.api) {
-        setTerminalLogs(prev => [...prev, '[SYSTEM] Resetting Winget sources to default...']);
+        addLogs('[SYSTEM] Resetting Winget sources to default...');
         await window.api.runSystemCommand('winget-source-reset');
         
-        setTerminalLogs(prev => [...prev, '[SYSTEM] Flushing Windows DNS Cache...']);
+        addLogs('[SYSTEM] Flushing Windows DNS Cache...');
         await window.api.runSystemCommand('flush-dns');
         
-        setTerminalLogs(prev => [...prev, '[SYSTEM] Network and Winget sources successfully repaired!', '']);
+        addLogs('[SYSTEM] Network and Winget sources successfully repaired!');
         setHasNetworkError(false);
       } else {
         await new Promise(r => setTimeout(r, 1500));
-        setTerminalLogs(prev => [...prev, '[SYSTEM] (Mock) Successfully completed repair.', '']);
+        addLogs('[SYSTEM] (Mock) Successfully completed repair.');
         setHasNetworkError(false);
       }
     } catch (e) {
-      setTerminalLogs(prev => [...prev, `[ERROR] Repair failed: ${e.message}`, '']);
+      addLogs(`[ERROR] Repair failed: ${e.message}`);
     } finally {
       setUpdating(false);
     }
@@ -293,7 +301,7 @@ export default function SoftwareUpdater() {
   const handleCancel = async () => {
     if (window.api) {
       await window.api.killActiveProcess();
-      setTerminalLogs(prev => [...prev, '', '[SYSTEM] Execution aborted by user.']);
+      addLogs('[SYSTEM] Execution aborted by user.');
       setUpdating(false);
     }
   };
@@ -562,39 +570,13 @@ export default function SoftwareUpdater() {
         </div>
 
         {/* Right Side: Terminal log */}
-        <div className="glass-panel border border-brand-border rounded-2xl p-5 flex flex-col h-[550px] justify-between">
-          <div className="flex-1 flex flex-col min-h-0">
-            <div className="flex justify-between items-center mb-3 select-none">
-              <div className="flex items-center gap-2">
-                <Terminal className="h-5 w-5 text-brand-cyan shrink-0" />
-                <h3 className="text-sm font-bold text-slate-200">Terminal Output</h3>
-              </div>
-              
-              {updating && (
-                <button
-                  onClick={handleCancel}
-                  className="px-2.5 py-1 bg-rose-950/60 hover:bg-rose-900 text-[10px] font-bold text-brand-danger rounded border border-brand-danger/30 flex items-center gap-1 cursor-pointer"
-                >
-                  <XCircle className="h-3.5 w-3.5" /> Stop Action
-                </button>
-              )}
-            </div>
-
-            {/* Simulated Black Box Console */}
-            <div className="flex-1 bg-slate-950/80 border border-brand-border rounded-xl p-4 font-mono text-[10px] text-emerald-400 overflow-y-auto leading-relaxed select-text shadow-inner">
-              {terminalLogs.length === 0 ? (
-                <p className="text-slate-500 font-bold italic">Console idle. Trigger updates to stream installation logs...</p>
-              ) : (
-                terminalLogs.map((log, index) => (
-                  <p key={index} className={log.startsWith('[ERROR]') || log.startsWith('ERROR:') ? 'text-brand-danger' : log.startsWith('[SYSTEM]') ? 'text-brand-cyan' : ''}>
-                    {log}
-                  </p>
-                ))
-              )}
-              <div ref={terminalEndRef}></div>
-            </div>
-          </div>
-        </div>
+        <CommandOutput
+          logs={terminalLogs}
+          onClear={() => setTerminalLogs([])}
+          title="Terminal Output"
+          isRunning={updating}
+          onCancel={handleCancel}
+        />
       </section>
     </div>
   );

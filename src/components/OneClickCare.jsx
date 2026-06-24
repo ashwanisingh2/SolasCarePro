@@ -3,6 +3,7 @@ import {
   Zap, Loader2, CheckCircle2, ShieldCheck, RefreshCw, XCircle,
   FolderOpen, Network, Shield, HardDrive, Terminal, AlertTriangle, Play
 } from 'lucide-react';
+import CommandOutput from './shared/CommandOutput';
 
 function OneClickCare() {
   const [currentStep, setCurrentStep] = useState('idle'); // idle, restore, restore-failed, junk-scan, junk-preview, junk-undo, network-check, network-warn, network-run, sfc, trim, security, complete
@@ -61,26 +62,27 @@ function OneClickCare() {
   useEffect(() => {
     // Listen to SFC stream
     if (window.api && window.api.onStream) {
-      unsubscribeRef.current = window.api.onStream('sfc-out', (data) => {
+      unsubscribeRef.current = window.api.onStream('care-out', (data) => {
         try {
           if (typeof data !== 'string') return;
-          setSfcLogs(prev => {
-            const newLogs = [...prev, ...data.split('\n')];
-            data.split('\n').forEach(line => {
-              try {
-                const match = line.match(/Verification\s+(\d+)%\s+complete/i) || line.match(/(\d+)%\s+complete/i) || line.match(/Verification\s+(\d+)%/i);
-                if (match && match[1]) {
-                  const p = parseInt(match[1]);
-                  if (!isNaN(p)) {
-                    setSfcProgress(p);
-                    setProgress(65 + Math.round(p * 0.15));
-                  }
+          const time = new Date().toLocaleTimeString(undefined, { hour12: false });
+          const newLines = data.split('\n').filter(Boolean).map(line => `[${time}] ${line}`);
+          
+          setSfcLogs(prev => [...prev, ...newLines]);
+          
+          data.split('\n').forEach(line => {
+            try {
+              const match = line.match(/Verification\s+(\d+)%\s+complete/i) || line.match(/(\d+)%\s+complete/i) || line.match(/Verification\s+(\d+)%/i);
+              if (match && match[1]) {
+                const p = parseInt(match[1]);
+                if (!isNaN(p)) {
+                  setSfcProgress(p);
+                  setProgress(65 + Math.round(p * 0.15));
                 }
-              } catch (innerErr) {
-                console.error('Error parsing line in sfc-out:', innerErr);
               }
-            });
-            return newLogs;
+            } catch (innerErr) {
+              console.error('Error parsing line in sfc-out:', innerErr);
+            }
           });
         } catch (err) {
           console.error('Error in sfc-out stream listener:', err);
@@ -449,10 +451,12 @@ function OneClickCare() {
     
     try {
       if (window.api) {
-        setSfcLogs(['[SYSTEM] Initializing SFC Verification System...', '']);
-        const res = await window.api.runSystemCommand('run-sfc-scan');
+        const time = new Date().toLocaleTimeString(undefined, { hour12: false });
+        setSfcLogs([`[${time}] [SYSTEM] Initializing SFC Verification System...`]);
+        const res = await window.api.runSystemCommand('repair-system-sfc');
         if (!res.success) {
-          setSfcLogs(prev => [...prev, '[WARN] SFC completed with minor warnings or resource files lock.']);
+          const warnTime = new Date().toLocaleTimeString(undefined, { hour12: false });
+          setSfcLogs(prev => [...prev, `[${warnTime}] [WARN] SFC completed with minor warnings or resource files lock.`]);
         }
       } else {
         const mockLines = [
@@ -466,7 +470,8 @@ function OneClickCare() {
         ];
         for (const line of mockLines) {
           await new Promise(r => setTimeout(r, 800));
-          setSfcLogs(prev => [...prev, line]);
+          const mockTime = new Date().toLocaleTimeString(undefined, { hour12: false });
+          setSfcLogs(prev => [...prev, `[${mockTime}] ${line}`]);
           const pctMatch = line.match(/Verification\s+(\d+)%/i);
           if (pctMatch && pctMatch[1]) {
             setSfcProgress(parseInt(pctMatch[1]));
@@ -1009,17 +1014,13 @@ function OneClickCare() {
                 <p className="text-[11px] text-slate-400 italic mt-1">{sfcEstTime}</p>
               </div>
 
-              {/* Console Output */}
-              <div className="flex-1 bg-slate-950/80 border border-brand-border rounded-xl p-4 font-mono text-[9px] text-brand-success overflow-y-auto leading-relaxed select-text shadow-inner min-h-[160px]">
-                {sfcLogs.length === 0 ? (
-                  <p className="text-slate-500 italic">Starting System File Checker scan...</p>
-                ) : (
-                  sfcLogs.map((log, index) => (
-                    <p key={index}>{log}</p>
-                  ))
-                )}
-                <div ref={sfcEndRef}></div>
-              </div>
+              <CommandOutput 
+                logs={sfcLogs} 
+                onClear={() => setSfcLogs([])} 
+                title="SFC Scan Console" 
+                isRunning={currentStep === 'sfc'} 
+                onCancel={window.api ? () => window.api.killActiveProcess() : null}
+              />
             </div>
           )}
 

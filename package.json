@@ -45,6 +45,10 @@
       "preload.js",
       "scripts/**/*"
     ],
+    "asar": true,
+    "asarUnpack": [
+      "scripts/**/*"
+    ],
     "win": {
       "target": "portable",
       "requestedExecutionLevel": "requireAdministrator"

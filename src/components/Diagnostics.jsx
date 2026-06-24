@@ -178,7 +178,7 @@ export default function Diagnostics() {
       return {
         name: 'System File Integrity Check & SFC Scan',
         command: 'sfc /scannow',
-        channel: 'sfc-out',
+        channel: 'care-out',
         info: 'Running Windows System File Checker (SFC) to detect and repair corrupted system files.'
       };
     }
@@ -210,7 +210,7 @@ export default function Diagnostics() {
 
     try {
       if (window.api) {
-        const commandKey = action.command.includes('sfc') ? 'run-sfc-scan' : 'flush-dns';
+        const commandKey = action.command.includes('sfc') ? 'repair-system-sfc' : 'flush-dns';
         const res = await window.api.runSystemCommand(commandKey);
         if (res.success) {
           setRepairStates(prev => ({ ...prev, [index]: 'success' }));

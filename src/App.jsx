@@ -1,39 +1,53 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  LayoutDashboard, Zap, Settings, 
-  ShieldAlert, ShieldCheck, RefreshCw, LifeBuoy, ClipboardList, FileText,
-  Sun, Moon, Cpu, Wifi, Clock, Battery, Eye, Trash2, BarChart3, Power
+  LayoutDashboard, Wrench, MonitorCheck, Cpu, Wifi, CircuitBoard, Package, Globe, 
+  Sparkles, Settings2, Database, Info, Activity, History, Bot, LifeBuoy, Zap, Settings,
+  Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 
-import { useTheme } from './context/ThemeContext';
+import OneClickDashboard from './components/RepairDashboard';
+import CoreRepair from './components/OneClickCare';
+import WindowsHealth from './components/WindowsHealth';
+import DriverManager from './components/DriverManager';
+import NetworkMonitor from './components/NetworkMonitor';
+import HardwareDiagnostics from './components/HardwareDiagnostics';
+import SoftwareUpdater from './components/SoftwareUpdater';
+import BrowserRepair from './components/BrowserRepair';
+import MaintenanceHub from './components/MaintenanceHub';
+import ServiceManager from './components/ServiceManager';
+import RegistryManager from './components/RegistryManager';
+import HardwareInfo from './components/HardwareInfo';
+import Diagnostics from './components/Diagnostics';
+import HistoryLogs from './components/HistoryLogs';
+import AutoPilot from './components/AutoPilot';
+import FixMyProblem from './components/FixMyProblem';
+import QuickFix from './components/QuickFix';
 import SettingsView from './components/Settings';
-import RepairDashboard from './components/RepairDashboard';
-import ToolsHub from './components/ToolsHub';
-import LogsCenter from './components/LogsCenter';
-import OneClickCare from './components/OneClickCare';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [toolsSubTab, setToolsSubTab] = useState('dashboard');
+  const [powerSubTab, setPowerSubTab] = useState('performance');
   const [isAdmin, setIsAdmin] = useState(false);
   const [systemInfo, setSystemInfo] = useState(null);
   const [loading, setLoading] = useState(true);
-  
-  const { theme, setTheme } = useTheme();
+  const [theme, setTheme] = useState('dark');
 
+  // Load persistence theme on mount (FIX 6)
   useEffect(() => {
-    // Check administrator status and system info from Electron
-    const initApp = async () => {
+    const initAppAndTheme = async () => {
       try {
         if (window.api) {
           const res = await window.api.isAdmin();
           setIsAdmin(res);
           const info = await window.api.getSystemInfo();
           setSystemInfo(info);
+          
+          const savedTheme = await window.api.getSetting('theme', 'dark');
+          setTheme(savedTheme);
         } else {
-          // Fallback for web browser testing
           setIsAdmin(true);
+          const savedTheme = localStorage.getItem('solas-theme') || 'dark';
+          setTheme(savedTheme);
         }
       } catch (err) {
         console.error('Failed app init:', err);
@@ -41,56 +55,84 @@ export default function App() {
         setLoading(false);
       }
     };
-    initApp();
+    initAppAndTheme();
   }, []);
 
+  // Sync theme changes with DOM and Electron SettingsStore (FIX 6)
+  const handleSetTheme = async (newTheme) => {
+    setTheme(newTheme);
+    if (window.api) {
+      await window.api.setSetting('theme', newTheme);
+    } else {
+      localStorage.setItem('solas-theme', newTheme);
+    }
+  };
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'light') {
+      root.classList.add('light-mode');
+    } else {
+      root.classList.remove('light-mode');
+    }
+  }, [theme]);
+
+  // Deep linking and routing mapper
   const handleSetActiveTab = (tabId) => {
-    if (tabId === 'fix') {
-      setActiveTab('tools');
-      setToolsSubTab('fix');
-    } else if (tabId === 'drivers') {
-      setActiveTab('tools');
-      setToolsSubTab('drivers');
+    if (tabId === 'fix' || tabId === 'care') {
+      setActiveTab('fix');
+    } else if (tabId === 'drivers' || tabId === 'driver') {
+      setActiveTab('driver');
     } else if (tabId === 'power') {
-      setActiveTab('tools');
-      setToolsSubTab('performance');
+      setActiveTab('power');
+      setPowerSubTab('performance');
     } else if ([
       'performance', 'network', 'startup', 'battery', 
-      'privacy', 'largefiles', 'quickfix'
+      'privacy', 'largefiles'
     ].includes(tabId)) {
-      setActiveTab('tools');
-      setToolsSubTab(tabId);
-    } else if (tabId === 'history') {
-      setActiveTab('tools');
-      setToolsSubTab('logs');
+      setActiveTab('power');
+      setPowerSubTab(tabId);
+    } else if (tabId === 'history' || tabId === 'logs') {
+      setActiveTab('logs');
     } else {
       setActiveTab(tabId);
     }
   };
 
   const navigation = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'care', label: 'One-Click Care', icon: ShieldCheck },
-    { id: 'tools', label: 'Tools Hub', icon: ClipboardList },
-    { id: 'logs', label: 'Logs Center', icon: FileText },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'dashboard',    label: 'Dashboard',          icon: LayoutDashboard,  component: OneClickDashboard },
+    { id: 'core',         label: 'Core Repair',         icon: Wrench,           component: CoreRepair },
+    { id: 'windows',      label: 'Windows',             icon: MonitorCheck,     component: WindowsHealth },
+    { id: 'driver',       label: 'Drivers',             icon: Cpu,              component: DriverManager },
+    { id: 'network',      label: 'Network',             icon: Wifi,             component: NetworkMonitor },
+    { id: 'hardware',     label: 'Hardware',            icon: CircuitBoard,     component: HardwareDiagnostics },
+    { id: 'software',     label: 'Software',            icon: Package,          component: SoftwareUpdater },
+    { id: 'browser',      label: 'Browser Repair',      icon: Globe,            component: BrowserRepair },
+    { id: 'maintenance',  label: 'Maintenance',         icon: Sparkles,         component: MaintenanceHub },
+    { id: 'services',     label: 'Services',            icon: Settings2,        component: ServiceManager },
+    { id: 'registry',     label: 'Registry',            icon: Database,         component: RegistryManager },
+    { id: 'hardware-info',label: 'Hardware Info',       icon: Info,             component: HardwareInfo },
+    { id: 'diagnostics',  label: 'Diagnostics',         icon: Activity,         component: Diagnostics },
+    { id: 'history',      label: 'History & Logs',      icon: History,          component: HistoryLogs },
+    { id: 'autopilot',    label: 'Auto-Pilot',          icon: Bot,              component: AutoPilot },
+    { id: 'fix',          label: 'Fix My Problem',      icon: LifeBuoy,         component: FixMyProblem },
+    { id: 'quickfix',     label: 'Quick Fix',           icon: Zap,              component: QuickFix },
+    { id: 'settings',     label: 'Settings',            icon: Settings,         component: SettingsView },
   ];
 
   const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard':
-        return <RepairDashboard setActiveTab={handleSetActiveTab} />;
-      case 'care':
-        return <OneClickCare />;
-      case 'tools':
-        return <ToolsHub activeSubTab={toolsSubTab} setActiveSubTab={setToolsSubTab} />;
-      case 'logs':
-        return <LogsCenter />;
-      case 'settings':
-        return <SettingsView />;
-      default:
-        return <RepairDashboard setActiveTab={handleSetActiveTab} />;
+    const item = navigation.find(n => n.id === activeTab);
+    if (item) {
+      const Component = item.component;
+      if (activeTab === 'dashboard') {
+        return <Component setActiveTab={handleSetActiveTab} />;
+      }
+      if (activeTab === 'settings') {
+        return <Component theme={theme} setTheme={handleSetTheme} />;
+      }
+      return <Component />;
     }
+    return <OneClickDashboard setActiveTab={handleSetActiveTab} />;
   };
 
   const getBreadcrumb = () => {
@@ -109,12 +151,12 @@ export default function App() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-brand-navy font-sans text-white transition-colors duration-300">
       {/* Sidebar Navigation */}
-      <aside className="w-64 bg-slate-900 border-r border-brand-border flex flex-col justify-between p-4 select-none overflow-y-auto shrink-0">
+      <aside className="w-16 md:w-64 bg-slate-900 border-r border-brand-border flex flex-col justify-between p-3 md:p-4 select-none overflow-y-auto shrink-0 transition-all duration-350">
         <div>
           {/* Logo Section */}
-          <div className="flex items-center gap-3 px-2 py-4 mb-6">
-            <Zap className="h-8 w-8 text-brand-violet animate-pulse" />
-            <div>
+          <div className="flex items-center gap-3 px-1 md:px-2 py-4 mb-6">
+            <Zap className="h-8 w-8 text-brand-violet animate-pulse shrink-0" />
+            <div className="hidden md:block">
               <h1 className="text-lg font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-brand-violet to-brand-cyan">
                 SOLAS PRO
               </h1>
@@ -131,14 +173,15 @@ export default function App() {
                 <button
                   key={item.id}
                   onClick={() => handleSetActiveTab(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
+                  title={item.label}
+                  className={`w-full flex items-center justify-center md:justify-start gap-3 px-3 md:px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
                     isActive 
                       ? 'bg-gradient-to-r from-brand-violet/20 to-brand-cyan/10 border-l-4 border-brand-violet text-white shadow-md' 
                       : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                   }`}
                 >
-                  <Icon className={`h-5 w-5 ${isActive ? 'text-brand-violet' : 'text-slate-400'}`} />
-                  {item.label}
+                  <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-brand-violet' : 'text-slate-400'}`} />
+                  <span className="hidden md:inline truncate">{item.label}</span>
                 </button>
               );
             })}
@@ -149,26 +192,27 @@ export default function App() {
         <div className="border-t border-brand-border pt-4 space-y-3">
           {/* Theme Toggle */}
           <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all cursor-pointer"
+            onClick={() => handleSetTheme(theme === 'dark' ? 'light' : 'dark')}
+            title={theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'}
+            className="w-full flex items-center justify-center md:justify-start gap-3 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all cursor-pointer"
           >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            {theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'}
+            {theme === 'dark' ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
+            <span className="hidden md:inline">{theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'}</span>
           </button>
-          <div className={`flex items-center gap-3 px-3 py-2 rounded-lg ${isAdmin ? 'bg-emerald-950/30 border border-emerald-500/20' : 'bg-rose-950/30 border border-rose-500/20'}`}>
+          <div className={`flex items-center justify-center md:justify-start gap-3 px-3 py-2 rounded-lg ${isAdmin ? 'bg-emerald-950/30 border border-emerald-500/20' : 'bg-rose-950/30 border border-rose-500/20'}`}>
             {isAdmin ? (
               <ShieldCheck className="h-5 w-5 text-brand-success shrink-0" />
             ) : (
               <ShieldAlert className="h-5 w-5 text-brand-danger shrink-0" />
             )}
-            <div className="truncate text-left">
+            <div className="hidden md:block truncate text-left">
               <p className="text-[11px] font-bold text-slate-300">PRIVILEGES</p>
               <p className={`text-[10px] font-semibold ${isAdmin ? 'text-brand-success' : 'text-brand-danger'}`}>
-                {isAdmin ? 'Administrator Mode' : 'Standard User'}
+                {isAdmin ? 'Admin Mode' : 'Standard'}
               </p>
             </div>
           </div>
-          <p className="text-[10px] text-slate-500 text-center mt-3 font-medium">Solas Care Pro v3.0.0</p>
+          <p className="hidden md:block text-[10px] text-slate-500 text-center mt-3 font-medium">Solas Care Pro v3.0.0</p>
         </div>
       </aside>
 

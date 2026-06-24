@@ -3,10 +3,9 @@ import {
   Settings, User, Moon, ShieldAlert, Sparkles, 
   Trash2, Globe, Heart, ShieldCheck, FileJson, Download, Upload
 } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
 
-export default function SettingsView() {
-  const { theme, setTheme } = useTheme();
+
+export default function SettingsView({ theme, setTheme }) {
   const [channel, setChannel] = useState('stable');
   const [logLevel, setLogLevel] = useState('info');
   const [runAtStartup, setRunAtStartup] = useState(false);
@@ -58,15 +57,23 @@ export default function SettingsView() {
 
   const handleExportSettings = async () => {
     try {
-      if (window.api) {
+      if (window.api && window.api.openSaveDialog) {
         setStatusMessage('Opening save file dialog...');
-        const result = await window.api.exportSettings();
-        if (result.cancelled) {
+        const result = await window.api.openSaveDialog({
+          title: 'Export Settings',
+          defaultPath: 'solas_settings_backup.json',
+          filters: [{ name: 'JSON Files', extensions: ['json'] }]
+        });
+        if (!result || result.canceled || !result.filePath) {
           setStatusMessage('Settings export cancelled.');
-        } else if (result.success) {
+          return;
+        }
+        const filePath = result.filePath;
+        const cmdRes = await window.api.runSystemCommand('export-settings', [filePath]);
+        if (cmdRes.success) {
           setStatusMessage('Settings configuration exported successfully.');
         } else {
-          throw new Error(result.error || 'Unknown error');
+          throw new Error(cmdRes.error || 'Export failed');
         }
         setTimeout(() => setStatusMessage(''), 3000);
       } else {
@@ -79,28 +86,35 @@ export default function SettingsView() {
 
   const handleImportSettings = async () => {
     try {
-      if (window.api) {
+      if (window.api && window.api.openFileDialog) {
         setStatusMessage('Opening import file dialog...');
-        const result = await window.api.importSettings();
-        if (result.cancelled) {
+        const result = await window.api.openFileDialog({
+          title: 'Import Settings',
+          filters: [{ name: 'JSON Files', extensions: ['json'] }]
+        });
+        if (!result || result.canceled || !result.filePaths || result.filePaths.length === 0) {
           setStatusMessage('Settings import cancelled.');
-        } else if (result.success && result.settings) {
-          // Update props and state with imported config
-          if (result.settings.theme) setTheme(result.settings.theme);
-          if (result.settings.channel) setChannel(result.settings.channel);
-          if (result.settings.logLevel) setLogLevel(result.settings.logLevel);
-          if (result.settings.runAtStartup !== undefined) setRunAtStartup(result.settings.runAtStartup);
+          return;
+        }
+        const filePath = result.filePaths[0];
+        const cmdRes = await window.api.runSystemCommand('import-settings', [filePath]);
+        if (cmdRes.success && cmdRes.stdout) {
+          const settings = JSON.parse(cmdRes.stdout);
+          if (settings.theme) setTheme(settings.theme);
+          if (settings.channel) setChannel(settings.channel);
+          if (settings.logLevel) setLogLevel(settings.logLevel);
+          if (settings.runAtStartup !== undefined) setRunAtStartup(settings.runAtStartup);
           
           setStatusMessage('Settings imported and synced successfully.');
         } else {
-          throw new Error(result.error || 'Unknown error');
+          throw new Error(cmdRes.error || 'Import failed');
         }
         setTimeout(() => setStatusMessage(''), 3000);
       } else {
         setStatusMessage('Import only supported in desktop mode.');
       }
-    } catch (err) {
-      setStatusMessage('Failed to import config file: ' + err.message);
+    } catch (e) {
+      setStatusMessage('Import failed: ' + e.message);
     }
   };
 

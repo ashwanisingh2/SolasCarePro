@@ -160,12 +160,28 @@ export default function StartupManager() {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-3 select-none">
+      <div className="flex flex-wrap gap-3 select-none">
         <button
           onClick={disableAllNonEssential}
           className="px-4 py-2 bg-brand-violet hover:bg-brand-violet/80 text-xs font-bold rounded-lg text-white cursor-pointer"
         >
           Disable All Non-Essential
+        </button>
+        <button
+          onClick={async () => {
+            if (window.api) await window.api.runSystemCommand('open-startup-manager');
+          }}
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-lg border border-brand-border text-slate-300 cursor-pointer"
+        >
+          Open Task Manager Startup
+        </button>
+        <button
+          onClick={async () => {
+            if (window.api) await window.api.runSystemCommand('open-autoruns-manager');
+          }}
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-lg border border-brand-border text-slate-300 cursor-pointer"
+        >
+          Launch Autoruns falling back to Task Manager
         </button>
       </div>
 

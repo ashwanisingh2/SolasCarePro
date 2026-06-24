@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Eye, EyeOff, Search, X, Trash2, FolderOpen, HardDrive, FileText, RefreshCw
 } from 'lucide-react';
-import { formatBytes } from '../utils/helpers';
+import { formatBytes } from '../utils/formatters';
 
 export default function LargeFileFinder() {
   const [largeFiles, setLargeFiles] = useState([]);

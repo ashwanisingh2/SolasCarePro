@@ -18,8 +18,10 @@ contextBridge.exposeInMainWorld('api', {
   // Settings Persistence
   getSetting: (key, defaultValue) => ipcRenderer.invoke('get-setting', { key, defaultValue }),
   setSetting: (key, value) => ipcRenderer.invoke('set-setting', { key, value }),
-  exportSettings: (filePath) => ipcRenderer.invoke('export-settings', filePath),
-  importSettings: (filePath) => ipcRenderer.invoke('import-settings', filePath),
+  openSaveDialog: (opts) => ipcRenderer.invoke('open-save-dialog', opts),
+  openFileDialog: (opts) => ipcRenderer.invoke('open-file-dialog', opts),
+  exportSettings: (path) => ipcRenderer.invoke('export-settings', path),
+  importSettings: (path) => ipcRenderer.invoke('import-settings', path),
   onSettingsCorrupted: (callback) => {
     const sub = () => callback();
     ipcRenderer.on('settings-corrupted', sub);
@@ -27,7 +29,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   
   // Driver backup & files helpers
-  checkDriverBackup: (pnpDeviceId) => ipcRenderer.invoke('check-driver-backup', pnpDeviceId),
+  checkDriverBackup: (id) => ipcRenderer.invoke('check-driver-backup', id),
   openLogsFolder: () => ipcRenderer.invoke('run-system-command', 'open-logs-folder', []),
   openReportsFolder: () => ipcRenderer.invoke('run-system-command', 'open-reports-folder', []),
   openLatestBsodReport: () => ipcRenderer.invoke('run-system-command', 'open-latest-bsod-report', []),

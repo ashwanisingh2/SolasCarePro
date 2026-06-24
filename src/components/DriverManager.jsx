@@ -3,6 +3,7 @@ import {
   Search, Cpu, ArrowUpCircle, RefreshCw, CheckCircle, 
   AlertTriangle, FileText, Ban, Power, Check, ShieldAlert, ShieldCheck
 } from 'lucide-react';
+import CommandOutput from './shared/CommandOutput';
 
 export default function DriverManager() {
   const [drivers, setDrivers] = useState([]);
@@ -409,6 +410,15 @@ export default function DriverManager() {
           )}
         </div>
       </section>
+
+      <div className="mt-6">
+        <CommandOutput
+          channel="care-out"
+          title="DriverManager System Console"
+          isRunning={scanning || activeAction !== null}
+          onCancel={window.api ? () => window.api.killActiveProcess() : null}
+        />
+      </div>
     </div>
   );
 }

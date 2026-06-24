@@ -7,6 +7,8 @@ import {
   Search, Settings, Terminal, Play
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNotification } from '../context/NotificationContext';
+import CommandOutput from './shared/CommandOutput';
 
 const QUICK_FIXES = [
   {
@@ -148,6 +150,7 @@ const QUICK_FIXES = [
 ];
 
 export default function QuickFix() {
+  const { addNotification } = useNotification();
   const [activeFix, setActiveFix] = useState(null);
   const [runningCommand, setRunningCommand] = useState(null);
   const [commandLogs, setCommandLogs] = useState([]);
@@ -170,43 +173,50 @@ export default function QuickFix() {
 
   const runCommand = async (fix, cmd) => {
     setRunningCommand(cmd.name);
-    setCommandLogs([`[SYSTEM] Starting: ${cmd.name}`]);
+    const initialTime = new Date().toLocaleTimeString(undefined, { hour12: false });
+    setCommandLogs([`[${initialTime}] [SYSTEM] Starting: ${cmd.name}`]);
     setCommandStatus(prev => ({ ...prev, [`${fix.id}-${cmd.name}`]: 'running' }));
 
     let unsubscribe = null;
     if (window.api && window.api.onStream) {
       unsubscribe = window.api.onStream('care-out', (data) => {
-        setCommandLogs(prev => [...prev, ...data.split('\n')]);
+        const streamTime = new Date().toLocaleTimeString(undefined, { hour12: false });
+        setCommandLogs(prev => [...prev, ...data.split('\n').filter(Boolean).map(line => `[${streamTime}] ${line}`)]);
       });
     }
 
     try {
-      if (window.api && cmd.key) {
-        const res = await window.api.runSystemCommand(cmd.key);
-        if (res.success) {
-          setCommandLogs(prev => [...prev, '', `[SUCCESS] ${cmd.name} completed successfully.`]);
-          setCommandStatus(prev => ({ ...prev, [`${fix.id}-${cmd.name}`]: 'success' }));
-        } else {
-          setCommandLogs(prev => [...prev, '', `[ERROR] ${cmd.name} failed: ${res.error || res.stderr}`]);
+      if (window.api) {
+        if (!cmd.key) {
+          addNotification(
+            'Not Supported',
+            `Operation "${cmd.name}" is not supported on this platform/configuration.`,
+            'warning'
+          );
+          const warnTime = new Date().toLocaleTimeString(undefined, { hour12: false });
+          setCommandLogs(prev => [...prev, `[${warnTime}] [WARN] Operation "${cmd.name}" is not supported (no command key).`]);
           setCommandStatus(prev => ({ ...prev, [`${fix.id}-${cmd.name}`]: 'failed' }));
+          return;
         }
-      } else if (window.api) {
-        const res = await window.api.runSystemCommand('run-system-command', [cmd.cmd]);
+        const res = await window.api.runSystemCommand(cmd.key);
+        const doneTime = new Date().toLocaleTimeString(undefined, { hour12: false });
         if (res.success) {
-          setCommandLogs(prev => [...prev, '', `[SUCCESS] ${cmd.name} completed successfully.`]);
+          setCommandLogs(prev => [...prev, `[${doneTime}] [SUCCESS] ${cmd.name} completed successfully.`]);
           setCommandStatus(prev => ({ ...prev, [`${fix.id}-${cmd.name}`]: 'success' }));
         } else {
-          setCommandLogs(prev => [...prev, '', `[ERROR] ${cmd.name} failed: ${res.error}`]);
+          setCommandLogs(prev => [...prev, `[${doneTime}] [ERROR] ${cmd.name} failed: ${res.error || res.stderr}`]);
           setCommandStatus(prev => ({ ...prev, [`${fix.id}-${cmd.name}`]: 'failed' }));
         }
       } else {
         // Mock
         await new Promise(r => setTimeout(r, 1500));
-        setCommandLogs(prev => [...prev, `[MOCK] ${cmd.name} executed successfully.`, '']);
+        const mockTime = new Date().toLocaleTimeString(undefined, { hour12: false });
+        setCommandLogs(prev => [...prev, `[${mockTime}] [SUCCESS] ${cmd.name} completed successfully.`]);
         setCommandStatus(prev => ({ ...prev, [`${fix.id}-${cmd.name}`]: 'success' }));
       }
     } catch (error) {
-      setCommandLogs(prev => [...prev, `[ERROR] ${error.message}`, '']);
+      const errTime = new Date().toLocaleTimeString(undefined, { hour12: false });
+      setCommandLogs(prev => [...prev, `[${errTime}] [ERROR] ${error.message}`]);
       setCommandStatus(prev => ({ ...prev, [`${fix.id}-${cmd.name}`]: 'failed' }));
     } finally {
       if (unsubscribe) unsubscribe();
@@ -313,36 +323,14 @@ export default function QuickFix() {
         })}
       </div>
 
-      {/* Console Output */}
       {activeFix && commandLogs.length > 0 && (
-        <div className="glass-panel border border-brand-border rounded-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-brand-border">
-            <div className="flex items-center gap-2">
-              <Terminal className="h-4 w-4 text-brand-violet" />
-              <span className="text-xs font-bold text-slate-300">Console Output</span>
-            </div>
-            <button
-              onClick={() => { setCommandLogs([]); setActiveFix(null); setCommandStatus({}); }}
-              className="text-[10px] text-slate-500 hover:text-white cursor-pointer"
-            >
-              Clear
-            </button>
-          </div>
-          <div className="p-4 font-mono text-[11px] text-emerald-400 max-h-[200px] overflow-y-auto leading-relaxed bg-slate-950/50">
-            {commandLogs.map((log, idx) => (
-              <p key={idx} className={
-                log.startsWith('[ERROR]') ? 'text-brand-danger' :
-                log.startsWith('[SUCCESS]') ? 'text-brand-success' :
-                log.startsWith('[SYSTEM]') ? 'text-brand-cyan' :
-                log.startsWith('[MOCK]') ? 'text-amber-400' :
-                ''
-              }>
-                {log}
-              </p>
-            ))}
-            <div ref={consoleEndRef} />
-          </div>
-        </div>
+        <CommandOutput
+          logs={commandLogs}
+          onClear={() => { setCommandLogs([]); setActiveFix(null); setCommandStatus({}); }}
+          isRunning={runningCommand !== null}
+          onCancel={window.api ? () => window.api.killActiveProcess() : null}
+          title="Quick Fix Terminal"
+        />
       )}
     </div>
   );

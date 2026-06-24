@@ -31,7 +31,7 @@ export function SystemMetricsProvider({ children }) {
 
   useEffect(() => {
     loadMetrics();
-    const interval = setInterval(loadMetrics, 4000); // Polling every 4 seconds to be lightweight
+    const interval = setInterval(loadMetrics, 2000); // Polling every 2 seconds
     return () => clearInterval(interval);
   }, []);
 
