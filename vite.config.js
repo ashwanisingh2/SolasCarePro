@@ -7,7 +7,6 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-<<<<<<< HEAD
     rollupOptions: {
       output: {
         manualChunks: {
@@ -19,8 +18,6 @@ export default defineConfig({
       }
     },
     chunkSizeWarningLimit: 600,
-=======
->>>>>>> ef9ba8c2986cbdc90189fe151417237d1c2946af
   },
   server: {
     port: 5173,

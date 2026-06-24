@@ -1014,8 +1014,7 @@ const ALLOWED_COMMANDS = {
       }
       return shell.openPath(reportPath);
     }
-<<<<<<< HEAD
-  ,
+  },
   'apply-power-plan': {
     type: 'powershell',
     timeout: 15000,
@@ -1080,11 +1079,7 @@ const ALLOWED_COMMANDS = {
       return deletes.join('; ');
     }
   }
-}
-=======
-  }
 };
->>>>>>> ef9ba8c2986cbdc90189fe151417237d1c2946af
 
 function validateTempBackupDir(backupDir) {
   if (typeof backupDir !== 'string') {
