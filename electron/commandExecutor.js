@@ -1747,23 +1747,16 @@ const ALLOWED_COMMANDS = {
     type: 'native',
     handler: async (args) => {
       const requestedCmd = args[0];
-      // Commands that conflict with each other (cannot run simultaneously).
-      // SFC and DISM both touch system files; chkdsk locks the drive.
       const CONFLICT_GROUPS = {
         'sfc-family': ['repair-system-sfc', 'verify-sfc', 'sfc-custom-scan', 'quick-full-system-repair'],
         'dism-family': ['repair-system-dism', 'component-store-scan', 'cleanup-component-store', 'dism-custom-source', 'quick-full-system-repair'],
         'disk-family': ['repair-chkdsk-scan', 'repair-chkdsk-full', 'defrag-drive', 'run-trim'],
         'boot-family': ['repair-boot', 'safe-mode-repair', 'repair-bcd-rebuild']
       };
-      const activeCommands = [];
-      // We can't directly enumerate in-flight commands, but activeChildCount tells us
-      // if ANY command is running. The UI should also track this client-side.
       const childCount = activeChildProcesses.size;
       let conflict = false;
       let conflictReason = null;
-
       if (childCount > 0) {
-        // Check if requested command belongs to a conflict group.
         for (const [group, members] of Object.entries(CONFLICT_GROUPS)) {
           if (members.includes(requestedCmd)) {
             conflict = true;
@@ -1772,14 +1765,121 @@ const ALLOWED_COMMANDS = {
           }
         }
       }
+      return JSON.stringify({ success: true, conflict, conflictReason, activeChildCount: childCount, requestedCommand: requestedCmd });
+    }
+  },
 
-      return JSON.stringify({
-        success: true,
-        conflict,
-        conflictReason,
-        activeChildCount: childCount,
-        requestedCommand: requestedCmd
-      });
+  // ============================================================
+  // PHASE 5: Missing features (disk benchmark, health score, error analyzer,
+  // installed software, sensors, AI diagnostics).
+  // ============================================================
+
+  'disk-benchmark': {
+    type: 'script',
+    script: 'disk_benchmark.ps1',
+    timeout: 180000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will run a disk speed benchmark (winsat). Takes 1-2 minutes. Continue?',
+    buildArgs: ([drive]) => {
+      const d = (typeof drive === 'string' && /^[A-Z]$/i.test(drive)) ? drive.toUpperCase() : 'C';
+      return ['-Drive', d];
+    }
+  },
+
+  'health-score': {
+    type: 'script',
+    script: 'health_score.ps1',
+    timeout: 45000
+  },
+
+  'analyze-error-logs': {
+    type: 'script',
+    script: 'error_log_analyzer.ps1',
+    timeout: 60000,
+    buildArgs: ([days]) => {
+      const d = parseInt(days, 10);
+      return ['-DaysBack', (d > 0 && d <= 90) ? String(d) : '7'];
+    }
+  },
+
+  'installed-software': {
+    type: 'script',
+    script: 'installed_software.ps1',
+    timeout: 30000
+  },
+
+  'hardware-sensors': {
+    type: 'script',
+    script: 'hardware_sensors.ps1',
+    timeout: 30000
+  },
+
+  'ai-diagnostics': {
+    type: 'script',
+    script: 'ai_diagnostics.ps1',
+    timeout: 60000,
+    buildArgs: ([action]) => {
+      const a = String(action || 'diagnose').toLowerCase();
+      if (!['diagnose', 'recommend', 'predict', 'self-heal'].includes(a)) throw new Error('Invalid AI action');
+      return ['-Action', a];
+    }
+  },
+
+  'list-reports': {
+    type: 'native',
+    handler: () => {
+      const reportsDir = path.join(process.env.APPDATA || '', 'SolasCare', 'reports');
+      try {
+        if (!fs.existsSync(reportsDir)) return JSON.stringify({ success: true, reports: [] });
+        const files = fs.readdirSync(reportsDir)
+          .filter(f => f.endsWith('.html') || f.endsWith('.json'))
+          .map(f => {
+            const fp = path.join(reportsDir, f);
+            const stat = fs.statSync(fp);
+            return { name: f, path: fp, sizeKB: Math.round(stat.size / 1024), modified: stat.mtime.toISOString() };
+          })
+          .sort((a, b) => new Date(b.modified) - new Date(a.modified));
+        return JSON.stringify({ success: true, reports: files });
+      } catch (e) {
+        return JSON.stringify({ success: false, error: e.message, reports: [] });
+      }
+    }
+  },
+
+  'delete-report': {
+    type: 'native',
+    handler: (args) => {
+      const reportName = args[0];
+      if (typeof reportName !== 'string' || reportName.includes('..') || reportName.includes('/') || reportName.includes('\\')) {
+        return JSON.stringify({ success: false, error: 'Invalid report name' });
+      }
+      const reportsDir = path.join(process.env.APPDATA || '', 'SolasCare', 'reports');
+      const fp = path.join(reportsDir, reportName);
+      try {
+        if (fs.existsSync(fp)) { fs.unlinkSync(fp); return JSON.stringify({ success: true }); }
+        return JSON.stringify({ success: false, error: 'Report not found' });
+      } catch (e) {
+        return JSON.stringify({ success: false, error: e.message });
+      }
+    }
+  },
+
+  'open-report': {
+    type: 'native',
+    handler: (args) => {
+      const reportName = args[0];
+      if (typeof reportName !== 'string' || reportName.includes('..') || reportName.includes('/') || reportName.includes('\\')) {
+        return JSON.stringify({ success: false, error: 'Invalid report name' });
+      }
+      const reportsDir = path.join(process.env.APPDATA || '', 'SolasCare', 'reports');
+      const fp = path.join(reportsDir, reportName);
+      try {
+        if (fs.existsSync(fp)) { shell.openPath(fp); return JSON.stringify({ success: true }); }
+        return JSON.stringify({ success: false, error: 'Report not found' });
+      } catch (e) {
+        return JSON.stringify({ success: false, error: e.message });
+      }
     }
   }
 };

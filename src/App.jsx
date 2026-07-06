@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, Wrench, MonitorCheck, Cpu, Wifi, CircuitBoard, Package, Globe, 
   Sparkles, Settings2, Database, Info, Activity, History, Bot, LifeBuoy, Zap, Settings,
-  Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope
+  Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope, Brain, FileText,
+  Gauge, Thermometer, HardDriveDownload
 } from 'lucide-react';
 
 const OneClickDashboard = React.lazy(() => import('./components/RepairDashboard'));
@@ -23,6 +24,9 @@ const AutoPilot = React.lazy(() => import('./components/AutoPilot'));
 const FixMyProblem = React.lazy(() => import('./components/FixMyProblem'));
 const QuickFix = React.lazy(() => import('./components/QuickFix'));
 const SettingsView = React.lazy(() => import('./components/Settings'));
+// NEW: Phase 5 components
+const AIDiagnostics = React.lazy(() => import('./components/AIDiagnostics'));
+const ReportCenter = React.lazy(() => import('./components/ReportCenter'));
 
 
 export default function App() {
@@ -109,6 +113,7 @@ export default function App() {
   // Removed duplicates from sidebar (Network and History & Logs are available inside Power Features subtabs)
   const navigation = [
     { id: 'dashboard',    label: 'Dashboard',          icon: LayoutDashboard,  component: OneClickDashboard },
+    { id: 'ai-diagnostics', label: 'AI Diagnostics',   icon: Brain,            component: AIDiagnostics },
     { id: 'smart-repair', label: 'Smart Repair',       icon: Stethoscope,      component: SmartRepair },
     { id: 'core',         label: 'Core Repair',         icon: Wrench,           component: CoreRepair },
     { id: 'windows',      label: 'Windows',             icon: MonitorCheck,     component: WindowsHealth },
@@ -122,6 +127,7 @@ export default function App() {
     { id: 'registry',     label: 'Registry',            icon: Database,         component: RegistryManager },
     { id: 'hardware-info',label: 'Hardware Info',       icon: Info,             component: HardwareInfo },
     { id: 'diagnostics',  label: 'Diagnostics',         icon: Activity,         component: Diagnostics },
+    { id: 'report-center',label: 'Report Center',       icon: FileText,         component: ReportCenter },
     { id: 'autopilot',    label: 'Auto-Pilot',          icon: Bot,              component: AutoPilot },
     { id: 'fix',          label: 'Fix My Problem',      icon: LifeBuoy,         component: FixMyProblem },
     { id: 'quickfix',     label: 'Quick Fix',           icon: Zap,              component: QuickFix },
