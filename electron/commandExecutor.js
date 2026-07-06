@@ -1633,6 +1633,154 @@ const ALLOWED_COMMANDS = {
         results
       });
     }
+  },
+
+  // ============================================================
+  // PHASE A-C: Advanced repair tools (all genuinely new, no duplicates).
+  // ============================================================
+
+  // NEW: Parse DISM log for errors/warnings from last DISM operation.
+  'parse-dism-log': {
+    type: 'script',
+    script: 'parse_dism_log.ps1',
+    timeout: 30000
+  },
+
+  // NEW: Generate HTML repair summary report (last 24h of audit.log).
+  'repair-summary-report': {
+    type: 'script',
+    script: 'repair_summary_report.ps1',
+    timeout: 30000,
+    buildArgs: ([hours]) => {
+      const h = parseInt(hours, 10);
+      return ['-HoursBack', (h > 0 && h <= 168) ? String(h) : '24'];
+    }
+  },
+
+  // NEW: SFC scan for a specific file (sfc /scanfile or /verifyfile).
+  'sfc-custom-scan': {
+    type: 'script',
+    script: 'sfc_custom_scan.ps1',
+    timeout: 600000,
+    streamChannel: 'care-out',
+    confirmationRequired: false,
+    buildArgs: ([action, filePath]) => {
+      const a = String(action || 'scanfile').toLowerCase();
+      if (!['scanfile', 'verifyfile'].includes(a)) throw new Error('Invalid SFC action');
+      if (typeof filePath !== 'string' || !filePath) throw new Error('FilePath is required');
+      return ['-Action', a, '-FilePath', filePath];
+    }
+  },
+
+  // NEW: DISM /RestoreHealth with custom source (ISO/WIM) + /LimitAccess.
+  'dism-custom-source': {
+    type: 'script',
+    script: 'dism_custom_source.ps1',
+    timeout: 3600000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will run DISM /RestoreHealth using a custom source (ISO/WIM) with no Windows Update fallback. Can take 30-60 min. Continue?',
+    buildArgs: ([sourcePath, sourceIndex]) => {
+      if (typeof sourcePath !== 'string' || !sourcePath) throw new Error('SourcePath is required');
+      const idx = parseInt(sourceIndex, 10) || 1;
+      return ['-SourcePath', sourcePath, '-SourceIndex', String(idx)];
+    }
+  },
+
+  // NEW: Registry hive repair (load/verify/backup SYSTEM, SOFTWARE, SAM, etc.).
+  'registry-hive-repair': {
+    type: 'script',
+    script: 'registry_hive_repair.ps1',
+    timeout: 120000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will load and verify a Windows registry hive. A backup is created first. Continue?',
+    buildArgs: ([hive, action]) => {
+      const allowedHives = ['SYSTEM', 'SOFTWARE', 'SAM', 'SECURITY', 'DEFAULT', 'USER'];
+      const allowedActions = ['analyze', 'repair', 'export'];
+      const h = String(hive || 'SOFTWARE').toUpperCase();
+      const a = String(action || 'analyze').toLowerCase();
+      if (!allowedHives.includes(h)) throw new Error('Invalid hive: ' + h);
+      if (!allowedActions.includes(a)) throw new Error('Invalid action: ' + a);
+      return ['-Hive', h, '-Action', a];
+    }
+  },
+
+  // NEW: Driver Verifier enable/disable/status for BSOD diagnosis.
+  'driver-verifier': {
+    type: 'script',
+    script: 'driver_verifier.ps1',
+    timeout: 120000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'Driver Verifier stresses drivers to catch faults. Enabling it may cause BSODs if a driver is faulty. Continue?',
+    buildArgs: ([action]) => {
+      const allowed = ['enable-standard', 'enable-all', 'disable', 'status'];
+      const a = String(action || 'status').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid Driver Verifier action');
+      return ['-Action', a];
+    }
+  },
+
+  // NEW: Safe Mode repair - configure/cancel/status safe boot.
+  'safe-mode-repair': {
+    type: 'script',
+    script: 'safe_mode_repair.ps1',
+    timeout: 30000,
+    confirmationRequired: true,
+    confirmationMessage: 'This will modify the boot configuration for Safe Mode. A reboot will be required. Continue?',
+    buildArgs: ([action, repairCommand]) => {
+      const allowed = ['configure', 'cancel', 'status'];
+      const a = String(action || 'status').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid safe mode action');
+      const args = ['-Action', a];
+      if (a === 'configure' && typeof repairCommand === 'string' && repairCommand) {
+        args.push('-RepairCommand', repairCommand);
+      }
+      return args;
+    }
+  },
+
+  // NEW: Conflict detection - check if a conflicting repair is already running.
+  // Returns { conflict: true/false, activeCommands: [...] } so the UI can warn.
+  'check-repair-conflicts': {
+    type: 'native',
+    handler: async (args) => {
+      const requestedCmd = args[0];
+      // Commands that conflict with each other (cannot run simultaneously).
+      // SFC and DISM both touch system files; chkdsk locks the drive.
+      const CONFLICT_GROUPS = {
+        'sfc-family': ['repair-system-sfc', 'verify-sfc', 'sfc-custom-scan', 'quick-full-system-repair'],
+        'dism-family': ['repair-system-dism', 'component-store-scan', 'cleanup-component-store', 'dism-custom-source', 'quick-full-system-repair'],
+        'disk-family': ['repair-chkdsk-scan', 'repair-chkdsk-full', 'defrag-drive', 'run-trim'],
+        'boot-family': ['repair-boot', 'safe-mode-repair', 'repair-bcd-rebuild']
+      };
+      const activeCommands = [];
+      // We can't directly enumerate in-flight commands, but activeChildCount tells us
+      // if ANY command is running. The UI should also track this client-side.
+      const childCount = activeChildProcesses.size;
+      let conflict = false;
+      let conflictReason = null;
+
+      if (childCount > 0) {
+        // Check if requested command belongs to a conflict group.
+        for (const [group, members] of Object.entries(CONFLICT_GROUPS)) {
+          if (members.includes(requestedCmd)) {
+            conflict = true;
+            conflictReason = `Another repair in the "${group}" group may already be running. Wait for it to finish or cancel it first.`;
+            break;
+          }
+        }
+      }
+
+      return JSON.stringify({
+        success: true,
+        conflict,
+        conflictReason,
+        activeChildCount: childCount,
+        requestedCommand: requestedCmd
+      });
+    }
   }
 };
 

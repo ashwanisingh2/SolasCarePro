@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Activity, AlertTriangle, CheckCircle2, XCircle, Loader2, Search,
   Cpu, Globe, HardDrive, Shield, Zap, RefreshCw, Terminal, ChevronDown,
-  ChevronUp, Wrench, Stethoscope, Gauge, ArrowRight, AlertCircle
+  ChevronUp, Wrench, Stethoscope, Gauge, ArrowRight, AlertCircle,
+  FileSearch, Database, Car, ShieldOff, FileText, Download, Power
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNotification } from '../context/NotificationContext';
@@ -112,6 +113,22 @@ export default function SmartRepair() {
 
   const [cbsReport, setCbsReport] = useState(null);
   const [cbsLoading, setCbsLoading] = useState(false);
+
+  // NEW: Advanced tools state (Phase A-D)
+  const [dismReport, setDismReport] = useState(null);
+  const [dismLoading, setDismLoading] = useState(false);
+  const [sfcFilePath, setSfcFilePath] = useState('');
+  const [sfcAction, setSfcAction] = useState('scanfile');
+  const [sfcResult, setSfcResult] = useState(null);
+  const [sfcLoading, setSfcLoading] = useState(false);
+  const [dismSourcePath, setDismSourcePath] = useState('');
+  const [registryHive, setRegistryHive] = useState('SOFTWARE');
+  const [registryAction, setRegistryAction] = useState('analyze');
+  const [registryResult, setRegistryResult] = useState(null);
+  const [verifierStatus, setVerifierStatus] = useState(null);
+  const [safeModeStatus, setSafeModeStatus] = useState(null);
+  const [repairReportPath, setRepairReportPath] = useState(null);
+  const [advancedRunning, setAdvancedRunning] = useState(false);
 
   // Error code lookup
   const [errorCode, setErrorCode] = useState('');
@@ -281,6 +298,177 @@ export default function SmartRepair() {
       addNotification('CBS Parse Failed', e.message, 'error');
     } finally {
       setCbsLoading(false);
+    }
+  };
+
+  // ─── NEW: Advanced tools (Phase A-D) ───
+
+  const runDismParse = async () => {
+    setDismLoading(true);
+    try {
+      if (window.api) {
+        const res = await window.api.runSystemCommand('parse-dism-log');
+        if (res.success && res.stdout) {
+          setDismReport(JSON.parse(res.stdout.trim()));
+        }
+      } else {
+        setDismReport({ success: true, outcome: 'Success', errorCount: 0, warningCount: 2, errors: [], warnings: ['Mock warning'], message: 'Mock: DISM completed successfully.' });
+      }
+    } catch (e) {
+      addNotification('DISM Parse Failed', e.message, 'error');
+    } finally {
+      setDismLoading(false);
+    }
+  };
+
+  const runSfcCustomScan = async () => {
+    if (!sfcFilePath.trim()) {
+      addNotification('SFC Custom Scan', 'Enter a file path first (e.g. C:\\Windows\\System32\\kernel32.dll)', 'warning');
+      return;
+    }
+    setSfcLoading(true);
+    setSfcResult(null);
+    try {
+      if (window.api) {
+        const res = await window.api.runSystemCommand('sfc-custom-scan', [sfcAction, sfcFilePath.trim()]);
+        if (res.success && res.stdout) {
+          try { setSfcResult(JSON.parse(res.stdout.trim())); } catch { setSfcResult({ message: res.stdout }); }
+        }
+      } else {
+        await new Promise(r => setTimeout(r, 1500));
+        setSfcResult({ success: true, sfcResult: 'Clean', file: sfcFilePath, message: 'Mock: No integrity violations.' });
+      }
+    } catch (e) {
+      addNotification('SFC Custom Scan Failed', e.message, 'error');
+    } finally {
+      setSfcLoading(false);
+    }
+  };
+
+  const runDismCustomSource = async () => {
+    if (!dismSourcePath.trim()) {
+      addNotification('DISM Custom Source', 'Enter a source path (ISO mount or .wim file) first.', 'warning');
+      return;
+    }
+    const ok = await confirm({
+      title: 'DISM Custom Source Repair',
+      message: 'Run DISM /RestoreHealth using this source with /LimitAccess (no Windows Update)?',
+      detail: `Source: ${dismSourcePath}\nThis can take 30-60 minutes.`,
+      confirmLabel: 'Run DISM',
+      danger: true
+    });
+    if (!ok) return;
+    setAdvancedRunning(true);
+    try {
+      if (window.api) {
+        const res = await window.api.runSystemCommand('dism-custom-source', [dismSourcePath.trim(), '1']);
+        addNotification(res.success ? 'DISM Complete' : 'DISM Failed', res.success ? 'Custom source repair completed.' : (res.error || 'Failed'), res.success ? 'success' : 'error');
+      } else {
+        await new Promise(r => setTimeout(r, 2000));
+        addNotification('DISM Complete', 'Mock: DISM custom source repair completed.', 'success');
+      }
+    } catch (e) {
+      addNotification('DISM Error', e.message, 'error');
+    } finally {
+      setAdvancedRunning(false);
+    }
+  };
+
+  const runRegistryHiveRepair = async () => {
+    setAdvancedRunning(true);
+    try {
+      if (window.api) {
+        const res = await window.api.runSystemCommand('registry-hive-repair', [registryHive, registryAction]);
+        if (res.success && res.stdout) {
+          try { setRegistryResult(JSON.parse(res.stdout.trim())); } catch { setRegistryResult({ message: res.stdout }); }
+        }
+      } else {
+        await new Promise(r => setTimeout(r, 1000));
+        setRegistryResult({ success: true, hive: registryHive, action: registryAction, subkeyCount: 42, message: `Mock: Hive ${registryHive} analyzed.` });
+      }
+    } catch (e) {
+      addNotification('Registry Hive Repair Failed', e.message, 'error');
+    } finally {
+      setAdvancedRunning(false);
+    }
+  };
+
+  const runDriverVerifier = async (action) => {
+    if (action !== 'status') {
+      const ok = await confirm({
+        title: 'Driver Verifier',
+        message: `Driver Verifier: ${action}?`,
+        detail: action.startsWith('enable') ? 'Enabling may cause BSODs if a driver is faulty. Reboot required.' : 'Disables Driver Verifier. Reboot required.',
+        danger: action.startsWith('enable')
+      });
+      if (!ok) return;
+    }
+    setAdvancedRunning(true);
+    try {
+      if (window.api) {
+        const res = await window.api.runSystemCommand('driver-verifier', [action]);
+        if (res.success && res.stdout) {
+          try { setVerifierStatus(JSON.parse(res.stdout.trim())); } catch { setVerifierStatus({ message: res.stdout }); }
+        }
+      } else {
+        await new Promise(r => setTimeout(r, 800));
+        setVerifierStatus({ success: true, enabled: action.startsWith('enable'), verifiedDriverCount: action === 'status' ? 0 : 23, message: `Mock: Verifier ${action}.` });
+      }
+    } catch (e) {
+      addNotification('Driver Verifier Failed', e.message, 'error');
+    } finally {
+      setAdvancedRunning(false);
+    }
+  };
+
+  const runSafeModeAction = async (action) => {
+    if (action === 'configure') {
+      const ok = await confirm({
+        title: 'Configure Safe Mode Boot',
+        message: 'Configure Windows to boot into Safe Mode on next restart?',
+        detail: 'A reboot will be required. You can cancel this from the same panel before rebooting.',
+        danger: true
+      });
+      if (!ok) return;
+    }
+    setAdvancedRunning(true);
+    try {
+      if (window.api) {
+        const res = await window.api.runSystemCommand('safe-mode-repair', [action]);
+        if (res.success && res.stdout) {
+          try { setSafeModeStatus(JSON.parse(res.stdout.trim())); } catch { setSafeModeStatus({ message: res.stdout }); }
+        }
+      } else {
+        await new Promise(r => setTimeout(r, 800));
+        setSafeModeStatus({ success: true, mode: action === 'configure' ? 'SafeMode' : 'Normal', message: `Mock: Safe mode ${action}.` });
+      }
+    } catch (e) {
+      addNotification('Safe Mode Action Failed', e.message, 'error');
+    } finally {
+      setAdvancedRunning(false);
+    }
+  };
+
+  const generateRepairReport = async () => {
+    setAdvancedRunning(true);
+    try {
+      if (window.api) {
+        const res = await window.api.runSystemCommand('repair-summary-report', ['24']);
+        if (res.success && res.stdout) {
+          try {
+            const parsed = JSON.parse(res.stdout.trim());
+            setRepairReportPath(parsed.reportPath);
+            addNotification('Report Generated', `Saved to: ${parsed.reportPath}`, 'success');
+          } catch {}
+        }
+      } else {
+        setRepairReportPath('C:\\Users\\Mock\\AppData\\Roaming\\SolasCare\\reports\\RepairSummary_mock.html');
+        addNotification('Report Generated', 'Mock report path set.', 'success');
+      }
+    } catch (e) {
+      addNotification('Report Generation Failed', e.message, 'error');
+    } finally {
+      setAdvancedRunning(false);
     }
   };
 
@@ -671,6 +859,164 @@ export default function SmartRepair() {
                 </p>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* ─── NEW: Advanced Repair Tools (Phase A-D) ─── */}
+      <div>
+        <h3 className="text-sm font-bold text-slate-200 mb-3 flex items-center gap-2">
+          <Wrench className="h-4 w-4 text-amber-400" />
+          Advanced Repair Tools
+        </h3>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* DISM Log Parser */}
+          <div className="glass-panel border border-brand-border rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                <Activity className="h-3.5 w-3.5 text-emerald-400" />
+                DISM Log Analyzer
+              </h4>
+              <button onClick={runDismParse} disabled={dismLoading} className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-brand-border rounded text-[10px] font-bold text-slate-300 cursor-pointer disabled:opacity-50">
+                {dismLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Parse'}
+              </button>
+            </div>
+            {dismReport && (
+              <div className="text-[11px] space-y-1">
+                <p className={`font-bold ${dismReport.outcome === 'Success' ? 'text-emerald-400' : dismReport.outcome === 'Failed' ? 'text-rose-400' : 'text-amber-400'}`}>
+                  {dismReport.outcome} ({dismReport.errorCount} errors, {dismReport.warningCount} warnings)
+                </p>
+                {dismReport.errors && dismReport.errors.length > 0 && (
+                  <div className="max-h-24 overflow-y-auto bg-slate-950/40 rounded p-2">
+                    {dismReport.errors.slice(0, 5).map((e, i) => <p key={i} className="text-[10px] text-rose-400 font-mono break-all">{e}</p>)}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* SFC Custom Scan */}
+          <div className="glass-panel border border-brand-border rounded-xl p-4">
+            <h4 className="text-xs font-bold text-slate-200 mb-2 flex items-center gap-2">
+              <FileSearch className="h-3.5 w-3.5 text-brand-cyan" />
+              SFC Custom File Scan
+            </h4>
+            <select value={sfcAction} onChange={e => setSfcAction(e.target.value)} className="w-full mb-2 px-2 py-1 bg-slate-950/60 border border-brand-border rounded text-[11px] text-slate-300">
+              <option value="scanfile">Scan & Repair (sfc /scanfile)</option>
+              <option value="verifyfile">Verify Only (sfc /verifyfile)</option>
+            </select>
+            <input
+              type="text"
+              value={sfcFilePath}
+              onChange={e => setSfcFilePath(e.target.value)}
+              placeholder="C:\Windows\System32\kernel32.dll"
+              className="w-full mb-2 px-2 py-1 bg-slate-950/60 border border-brand-border rounded text-[11px] text-slate-200 font-mono placeholder:text-slate-600"
+            />
+            <button onClick={runSfcCustomScan} disabled={sfcLoading} className="w-full px-2.5 py-1.5 bg-brand-cyan/20 hover:bg-brand-cyan/30 border border-brand-cyan/40 rounded text-[11px] font-bold text-brand-cyan cursor-pointer disabled:opacity-50">
+              {sfcLoading ? <Loader2 className="h-3 w-3 animate-spin mx-auto" /> : 'Run Scan'}
+            </button>
+            {sfcResult && (
+              <p className={`text-[10px] mt-2 ${sfcResult.success ? 'text-emerald-400' : 'text-rose-400'}`}>{sfcResult.message}</p>
+            )}
+          </div>
+
+          {/* DISM Custom Source */}
+          <div className="glass-panel border border-brand-border rounded-xl p-4">
+            <h4 className="text-xs font-bold text-slate-200 mb-2 flex items-center gap-2">
+              <Download className="h-3.5 w-3.5 text-violet-400" />
+              DISM Custom Source (ISO/WIM)
+            </h4>
+            <input
+              type="text"
+              value={dismSourcePath}
+              onChange={e => setDismSourcePath(e.target.value)}
+              placeholder="D:\sources\install.wim or mounted ISO path"
+              className="w-full mb-2 px-2 py-1 bg-slate-950/60 border border-brand-border rounded text-[11px] text-slate-200 font-mono placeholder:text-slate-600"
+            />
+            <button onClick={runDismCustomSource} disabled={advancedRunning} className="w-full px-2.5 py-1.5 bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 rounded text-[11px] font-bold text-violet-300 cursor-pointer disabled:opacity-50">
+              {advancedRunning ? <Loader2 className="h-3 w-3 animate-spin mx-auto" /> : 'Run DISM with Source'}
+            </button>
+            <p className="text-[9px] text-slate-500 mt-1">Uses /LimitAccess (no WU fallback). 30-60 min.</p>
+          </div>
+
+          {/* Registry Hive Repair */}
+          <div className="glass-panel border border-brand-border rounded-xl p-4">
+            <h4 className="text-xs font-bold text-slate-200 mb-2 flex items-center gap-2">
+              <Database className="h-3.5 w-3.5 text-amber-400" />
+              Registry Hive Repair
+            </h4>
+            <div className="flex gap-2 mb-2">
+              <select value={registryHive} onChange={e => setRegistryHive(e.target.value)} className="flex-1 px-2 py-1 bg-slate-950/60 border border-brand-border rounded text-[11px] text-slate-300">
+                {['SYSTEM', 'SOFTWARE', 'SAM', 'SECURITY', 'DEFAULT', 'USER'].map(h => <option key={h} value={h}>{h}</option>)}
+              </select>
+              <select value={registryAction} onChange={e => setRegistryAction(e.target.value)} className="px-2 py-1 bg-slate-950/60 border border-brand-border rounded text-[11px] text-slate-300">
+                <option value="analyze">Analyze</option>
+                <option value="repair">Repair</option>
+                <option value="export">Export</option>
+              </select>
+            </div>
+            <button onClick={runRegistryHiveRepair} disabled={advancedRunning} className="w-full px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded text-[11px] font-bold text-amber-300 cursor-pointer disabled:opacity-50">
+              {advancedRunning ? <Loader2 className="h-3 w-3 animate-spin mx-auto" /> : 'Run Hive Operation'}
+            </button>
+            {registryResult && (
+              <p className={`text-[10px] mt-2 ${registryResult.success ? 'text-emerald-400' : 'text-rose-400'}`}>{registryResult.message}</p>
+            )}
+          </div>
+
+          {/* Driver Verifier */}
+          <div className="glass-panel border border-brand-border rounded-xl p-4">
+            <h4 className="text-xs font-bold text-slate-200 mb-2 flex items-center gap-2">
+              <Car className="h-3.5 w-3.5 text-rose-400" />
+              Driver Verifier (BSOD Diagnosis)
+            </h4>
+            <div className="grid grid-cols-2 gap-1.5 mb-2">
+              <button onClick={() => runDriverVerifier('status')} disabled={advancedRunning} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-brand-border rounded text-[10px] font-bold text-slate-300 cursor-pointer disabled:opacity-50">Status</button>
+              <button onClick={() => runDriverVerifier('enable-standard')} disabled={advancedRunning} className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded text-[10px] font-bold text-amber-300 cursor-pointer disabled:opacity-50">Enable Std</button>
+              <button onClick={() => runDriverVerifier('enable-all')} disabled={advancedRunning} className="px-2 py-1 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 rounded text-[10px] font-bold text-rose-300 cursor-pointer disabled:opacity-50">Enable All</button>
+              <button onClick={() => runDriverVerifier('disable')} disabled={advancedRunning} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-brand-border rounded text-[10px] font-bold text-slate-300 cursor-pointer disabled:opacity-50">Disable</button>
+            </div>
+            {verifierStatus && (
+              <p className={`text-[10px] ${verifierStatus.enabled ? 'text-amber-400' : 'text-slate-400'}`}>{verifierStatus.message}</p>
+            )}
+          </div>
+
+          {/* Safe Mode Repair */}
+          <div className="glass-panel border border-brand-border rounded-xl p-4">
+            <h4 className="text-xs font-bold text-slate-200 mb-2 flex items-center gap-2">
+              <Power className="h-3.5 w-3.5 text-cyan-400" />
+              Safe Mode Boot Config
+            </h4>
+            <div className="grid grid-cols-3 gap-1.5 mb-2">
+              <button onClick={() => runSafeModeAction('status')} disabled={advancedRunning} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-brand-border rounded text-[10px] font-bold text-slate-300 cursor-pointer disabled:opacity-50">Status</button>
+              <button onClick={() => runSafeModeAction('configure')} disabled={advancedRunning} className="px-2 py-1 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 rounded text-[10px] font-bold text-cyan-300 cursor-pointer disabled:opacity-50">Configure</button>
+              <button onClick={() => runSafeModeAction('cancel')} disabled={advancedRunning} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-brand-border rounded text-[10px] font-bold text-slate-300 cursor-pointer disabled:opacity-50">Cancel</button>
+            </div>
+            {safeModeStatus && (
+              <p className={`text-[10px] ${safeModeStatus.mode === 'SafeMode' ? 'text-amber-400' : 'text-slate-400'}`}>{safeModeStatus.message}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Repair Summary Report Generator */}
+      <div className="glass-panel border border-brand-border rounded-xl p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+              <FileText className="h-4 w-4 text-brand-violet" />
+              Repair Summary Report
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-1">Generates an HTML report of all repairs in the last 24 hours.</p>
+          </div>
+          <button onClick={generateRepairReport} disabled={advancedRunning} className="px-4 py-2 bg-brand-violet/20 hover:bg-brand-violet/30 border border-brand-violet/40 rounded-lg text-xs font-bold text-brand-violet cursor-pointer flex items-center gap-2 disabled:opacity-50">
+            {advancedRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Generate Report
+          </button>
+        </div>
+        {repairReportPath && (
+          <div className="mt-3 p-2 bg-slate-950/40 border border-brand-border rounded text-[11px] text-slate-300 font-mono break-all">
+            {repairReportPath}
           </div>
         )}
       </div>
