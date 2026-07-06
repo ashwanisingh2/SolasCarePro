@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Zap, Cpu, Wifi, Shield, Clock, Trash2, Calendar, ClipboardList
+  Zap, Cpu, Wifi, Shield, Clock, Trash2, Calendar, ClipboardList, Battery
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -20,7 +20,7 @@ export default function PowerFeatures({ activeSubTab: propActiveSubTab, setActiv
 
   const subTabs = [
     { id: 'performance', label: 'Performance Mode', icon: Cpu },
-    { id: 'battery', label: 'Battery Saver', icon: BatterySaver }, // Wait, icon is a React component, let's use the component or a Lucide icon. Lucide Battery fits.
+    { id: 'battery', label: 'Battery Saver', icon: Battery },
     { id: 'network', label: 'Network Monitor', icon: Wifi },
     { id: 'privacy', label: 'Privacy Cleaner', icon: Shield },
     { id: 'startup', label: 'Startup Manager', icon: Clock },
@@ -62,7 +62,7 @@ export default function PowerFeatures({ activeSubTab: propActiveSubTab, setActiv
         {/* Left Sub-sidebar */}
         <div className="w-56 bg-slate-900/50 border-r border-brand-border p-3 overflow-y-auto shrink-0 select-none">
           {subTabs.map(tab => {
-            const TabIcon = tab.id === 'battery' ? Zap : tab.icon; // Lucide Battery or Zap
+            const TabIcon = tab.icon;
             const isActive = activeSubTab === tab.id;
             return (
               <button

@@ -88,7 +88,9 @@ switch ($Action) {
         } elseif ($FilesJson) {
             $paths = $FilesJson | ConvertFrom-Json
         } else {
-            Write-Error "FilesPath or FilesJson is required for clean action."
+            # Fix: emit JSON error object instead of Write-Error (which goes to
+            # stderr and leaves stdout empty, breaking the app's JSON parser).
+            Write-Output '{"success":false,"error":"FilesPath or FilesJson is required for clean action."}'
             exit 1
         }
         
@@ -156,7 +158,8 @@ switch ($Action) {
             }
         }
         Remove-Item -Path $BackupDir -Recurse -Force
-        Write-Output "Undo completed."
+        # Fix: emit JSON status object instead of plain text "Undo completed."
+        Write-Output '{"success":true,"message":"Undo completed"}'
     }
     
     "commit" {
@@ -180,6 +183,7 @@ switch ($Action) {
             }
         }
         Remove-Item -Path $BackupDir -Recurse -Force
-        Write-Output "Commit completed."
+        # Fix: emit JSON status object instead of plain text "Commit completed."
+        Write-Output '{"success":true,"message":"Commit completed"}'
     }
 }

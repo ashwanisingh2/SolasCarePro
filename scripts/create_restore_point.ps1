@@ -4,15 +4,16 @@ $ErrorActionPreference = 'SilentlyContinue'
 $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 $description = "SolasCare_$timestamp"
 
-Write-Output "[SYSTEM] Initializing Windows System Restore point..."
+# Fix: do not Write-Output plain-text status messages to stdout - they pollute
+# the JSON output and break the app's stdout parser. Use Write-Verbose instead.
 try {
     # Create restore point using WMI SystemRestore class
     $sysRestore = [wmiclass]"\\.\root\default:SystemRestore"
     $result = $sysRestore.CreateRestorePoint($description, 0, 100)
-    
+
     # Allow index compilation
     Start-Sleep -Seconds 2
-    
+
     # Query back to verify creation
     $verify = Get-ComputerRestorePoint | Where-Object { $_.Description -eq $description } | Select-Object -First 1
     if ($verify) {

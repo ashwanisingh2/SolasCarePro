@@ -68,25 +68,26 @@ export default function PerformanceMode({ currentMode, onModeChange }) {
     setIsApplying(true);
     const profile = PERFORMANCE_PROFILES[mode];
 
-    // Simulate applying settings
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Map the local mode key to the allow-listed power plan key in main process.
+    // Main process refuses raw `powercfg -setactive <GUID>` strings now (security).
+    const POWER_PLAN_KEYS = {
+      gaming: 'high',
+      work: 'balanced',
+      powerSaving: 'saver'
+    };
 
     if (window.api) {
       try {
-        // Apply power plan
-        const powerPlanCmd = {
-          gaming: 'powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c', // High Performance
-          work: 'powercfg -setactive 381b4222-f694-41f0-9685-ff5bb260df2e',    // Balanced
-          powerSaving: 'powercfg -setactive a1841308-3541-4fab-bc81-f71556f20b4a' // Power Saver
-        };
-
-        const result = await window.api.runSystemCommand('apply-power-plan', [powerPlanCmd[mode]]);
+        const result = await window.api.runSystemCommand('apply-power-plan', [POWER_PLAN_KEYS[mode]]);
         if (!result.success) {
           console.warn('Power plan change failed:', result.error);
         }
       } catch (error) {
         console.warn('Failed to apply system settings:', error);
       }
+    } else {
+      // Mock-mode only: simulate apply delay so the UI shows the loading state.
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
 
     setActiveMode(mode);

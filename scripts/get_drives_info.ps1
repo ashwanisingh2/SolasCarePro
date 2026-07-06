@@ -1,61 +1,63 @@
 # get_drives_info.ps1
-$ErrorActionPreference = 'SilentlyContinue'
+$ErrorActionPreference = 'Stop'
 
 $results = @()
 $osVersion = [System.Environment]::OSVersion.Version
 
 try {
     if ($osVersion.Major -ge 10) {
-        $volumes = Get-Volume | Where-Object { $_.DriveLetter }
+        $volumes = Get-Volume -ErrorAction Stop | Where-Object { $_.DriveLetter }
         foreach ($vol in $volumes) {
             $letter = $vol.DriveLetter.ToString()
-            $partition = Get-Partition -DriveLetter $letter
+            $partition = $null
+            try { $partition = Get-Partition -DriveLetter $letter -ErrorAction Stop } catch {}
             $mediaType = "Unspecified"
             if ($partition) {
-                $phys = Get-PhysicalDisk -DeviceID $partition.DiskNumber
-                if ($phys) {
-                    $mediaType = $phys.MediaType.ToString()
-                }
+                try {
+                    $phys = Get-PhysicalDisk -DeviceID $partition.DiskNumber -ErrorAction Stop
+                    if ($phys) { $mediaType = $phys.MediaType.ToString() }
+                } catch {}
             }
-            # Retrieve basic fragmentation mock or estimation to avoid 5-minute defrag hang
-            $fragBefore = Get-Random -Minimum 3 -Maximum 12
-            $results += @{
+            # Fix: do not fabricate random fragmentation %. Real fragmentation
+            # requires `defrag /A` which can take minutes per drive. Leave as
+            # null and let the UI render "N/A" instead of fake numbers.
+            $results += [PSCustomObject]@{
                 DriveLetter = $letter
                 MediaType = $mediaType
                 Size = $vol.Size
                 FreeSpace = $vol.SizeRemaining
-                FragBefore = $fragBefore
-                FragAfter = 0
+                FragBefore = $null
+                FragAfter = $null
             }
         }
     } else {
         # Windows 7 / 8 compatibility mode fallback
-        $disks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3"
+        $disks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop
         foreach ($d in $disks) {
             $letter = $d.DeviceID.Replace(":", "")
-            # Simple heuristic for legacy systems: C drive is SSD, others are HDD
-            $mediaType = if ($letter -eq "C") { "SSD" } else { "HDD" }
-            $fragBefore = Get-Random -Minimum 5 -Maximum 15
-            $results += @{
+            # Fix: do not assume C is SSD - we don't know without querying Win32_DiskDrive.
+            # Leave MediaType as "Unknown" so UI can render it accordingly.
+            $results += [PSCustomObject]@{
                 DriveLetter = $letter
-                MediaType = $mediaType
+                MediaType = "Unknown"
                 Size = $d.Size
                 FreeSpace = $d.FreeSpace
-                FragBefore = $fragBefore
-                FragAfter = 1
+                FragBefore = $null
+                FragAfter = $null
             }
         }
     }
 } catch {
-    # Absolute safe fallback
-    $results += @{
-        DriveLetter = "C"
-        MediaType = "SSD"
-        Size = 250000000000
-        FreeSpace = 120000000000
-        FragBefore = 5
-        FragAfter = 0
-    }
+    # Fix: do not fabricate a fake C: drive on error. Surface the error as JSON.
+    Write-Output ('{"error":"' + ($_.Exception.Message -replace '[\\"]',' ') + '"}')
+    exit 0
 }
 
-Write-Output ($results | ConvertTo-Json -Compress)
+# Fix: empty array on PS 5.1 emits nothing via ConvertTo-Json. Force array shape.
+if ($results.Count -eq 0) {
+    Write-Output "[]"
+} elseif ($results.Count -eq 1) {
+    Write-Output "[$($results | ConvertTo-Json -Compress)]"
+} else {
+    Write-Output ($results | ConvertTo-Json -Compress)
+}

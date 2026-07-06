@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 
 const NotificationContext = createContext();
 
@@ -10,26 +10,33 @@ export const useNotification = () => {
 
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
+  // Track active timeouts so we can clear them on unmount.
+  const timeoutsRef = useRef(new Set());
 
   const addNotification = useCallback((title, message, type = 'info', duration = 5000) => {
-    const id = Date.now();
+    const id = Date.now() + Math.random();
     setNotifications(prev => [...prev, { id, title, message, type }]);
 
-    // Also try native Windows notification
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, { body: message, icon: '/icon.png' });
-    } else if (window.api) {
-      // Electron native notification
-      const { ipcRenderer } = window.require?.('electron') || {};
-      if (ipcRenderer) {
-        ipcRenderer.send('show-notification', { title, body: message });
+    // Prefer the IPC channel for native Windows notifications - works whether
+    // or not the renderer has Notification permission, and integrates with the
+    // tray icon. `window.require` is not exposed under contextBridge sandboxing
+    // (the previous code path was dead), so we go straight through window.api.
+    if (window.api && typeof window.api.showNotification === 'function') {
+      try {
+        window.api.showNotification(title, message);
+      } catch (e) {
+        // Silently fall back to in-app toast below.
       }
+    } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      try { new Notification(title, { body: message }); } catch (_) {}
     }
 
     if (duration > 0) {
-      setTimeout(() => {
+      const t = setTimeout(() => {
+        timeoutsRef.current.delete(t);
         setNotifications(prev => prev.filter(n => n.id !== id));
       }, duration);
+      timeoutsRef.current.add(t);
     }
   }, []);
 
@@ -37,11 +44,18 @@ export function NotificationProvider({ children }) {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 
-  // Request permission on mount
+  // Request permission on mount (only relevant in non-Electron contexts)
   useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
     }
+    return () => {
+      // Clear any pending timeouts to avoid setState-after-unmount warnings.
+      for (const t of timeoutsRef.current) {
+        try { clearTimeout(t); } catch (_) {}
+      }
+      timeoutsRef.current.clear();
+    };
   }, []);
 
   return (

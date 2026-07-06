@@ -21,6 +21,9 @@ $cFreeGB = [math]::Round($cDrive.FreeSpace / (1024*1024*1024), 2)
 $cUsedGB = $cTotalGB - $cFreeGB
 $cFreePercent = [math]::Round(($cFreeGB / $cTotalGB) * 100, 1)
 
+# Fix: $build was used at line 318 but never assigned. Derive it from the OS object.
+$build = $os.BuildNumber
+
 # Health Score
 $score = 100
 if ($ramUsedPercent -gt 85) { $score -= 10 }
@@ -325,8 +328,8 @@ $html = @"
             <div class="card">
                 <div class="card-title">Issues Alert Panel</div>
                 <ul class="list-unstyled">
-                    <li><span>Pending Updates:</span> <span class="$((if($pendingUpdates -gt 0){'text-warning'}{'text-success'}))">$pendingUpdates Updates</span></li>
-                    <li><span>Driver Anomalies:</span> <span class="$((if($badDrivers){'text-danger'}{'text-success'}))">$((if($badDrivers){$badDrivers.Count}{0})) Failed</span></li>
+                    <li><span>Pending Updates:</span> <span class="$(if($pendingUpdates -gt 0){'text-warning'}else{'text-success'})">$pendingUpdates Updates</span></li>
+                    <li><span>Driver Anomalies:</span> <span class="$(if($badDrivers){'text-danger'}else{'text-success'})">$(if($badDrivers){$badDrivers.Count}else{0}) Failed</span></li>
                     <li><span>Installed Software:</span> <span>$installedCount apps</span></li>
                     <li><span>Last Boot:</span> <span>$($os.LastBootUpTime.ToString("yyyy-MM-dd HH:mm:ss"))</span></li>
                 </ul>

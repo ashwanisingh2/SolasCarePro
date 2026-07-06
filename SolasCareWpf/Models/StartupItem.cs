@@ -1,12 +1,16 @@
-using System;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace SolasCareWpf.Models
 {
-    public class StartupItem
+    // Fix HIGH: previously this was a POCO, so the DataTrigger bindings in
+    // SpeedBoosterView.xaml (status pill, action button label) never re-fired
+    // after ToggleStartupAppAsync flipped IsEnabled. Making it an ObservableObject
+    // gives every property change notification so the UI stays in sync.
+    public partial class StartupItem : ObservableObject
     {
-        public string Name { get; set; } = "";
-        public string CommandValue { get; set; } = "";
-        public string RegistryPath { get; set; } = "";
-        public bool IsEnabled { get; set; } = true;
+        [ObservableProperty] private string _name = "";
+        [ObservableProperty] private string _commandValue = "";
+        [ObservableProperty] private string _registryPath = "";
+        [ObservableProperty] private bool _isEnabled = true;
     }
 }

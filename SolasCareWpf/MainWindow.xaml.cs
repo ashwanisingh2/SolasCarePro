@@ -1,13 +1,5 @@
-﻿using System.Text;
+using System;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace SolasCareWpf;
 
@@ -19,5 +11,14 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+    }
+
+    // Fix HIGH: dispose the MainViewModel (which forwards to DashboardViewModel)
+    // when the window closes. Without this the DashboardViewModel's polling
+    // Task + PerformanceCounter native handles leak until process exit.
+    protected override void OnClosed(EventArgs e)
+    {
+        (DataContext as IDisposable)?.Dispose();
+        base.OnClosed(e);
     }
 }

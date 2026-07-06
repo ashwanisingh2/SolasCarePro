@@ -40,13 +40,14 @@ export default function BatterySaver() {
     try {
       if (window.api) {
         if (!saverMode) {
-          // Enable battery saver
-          await window.api.runSystemCommand('apply-power-plan', ['powercfg -setactive a1841308-3541-4fab-bc81-f71556f20b4a']);
+          // Enable battery saver: switch to Power Saver plan, dim screen, throttle background apps.
+          // Main process maps 'saver'/'balanced' to fixed powercfg arguments (allow-listed, no raw PS).
+          await window.api.runSystemCommand('apply-power-plan', ['saver']);
           await window.api.runSystemCommand('disable-background-apps');
           await window.api.runSystemCommand('set-display-brightness', ['50']);
         } else {
-          // Disable battery saver
-          await window.api.runSystemCommand('apply-power-plan', ['powercfg -setactive 381b4222-f694-41f0-9685-ff5bb260df2e']);
+          // Disable battery saver: return to Balanced plan, restore brightness and background apps.
+          await window.api.runSystemCommand('apply-power-plan', ['balanced']);
           await window.api.runSystemCommand('enable-background-apps');
           await window.api.runSystemCommand('set-display-brightness', ['100']);
         }

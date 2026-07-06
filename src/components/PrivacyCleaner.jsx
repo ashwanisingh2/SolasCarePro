@@ -14,11 +14,13 @@ export default function PrivacyCleaner() {
     {
       id: 'browserHistory',
       name: 'Browser History',
-      description: 'Chrome, Edge, Firefox browsing history and cache',
+      description: 'Chrome, Edge, Firefox browsing history',
       icon: <Globe className="h-5 w-5 text-blue-400" />,
       defaultChecked: true,
-      mockSize: 245000000, // ~245MB
-      cmd: 'Remove-Item "$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\History" -Force -ErrorAction SilentlyContinue; Remove-Item "$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\History" -Force -ErrorAction SilentlyContinue'
+      // categoryId is sent to main process - main process looks up the actual
+      // PowerShell command in its allow-list (never trust raw commands from renderer).
+      categoryId: 'browser-history',
+      estimatedSize: 245000000
     },
     {
       id: 'cookies',
@@ -26,8 +28,8 @@ export default function PrivacyCleaner() {
       description: 'Stored cookies and website data from all browsers',
       icon: <Cookie className="h-5 w-5 text-amber-400" />,
       defaultChecked: true,
-      mockSize: 85000000,
-      cmd: 'Remove-Item "$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\Cookies" -Force -ErrorAction SilentlyContinue; Remove-Item "$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\Cookies" -Force -ErrorAction SilentlyContinue'
+      categoryId: 'browser-cookies',
+      estimatedSize: 85000000
     },
     {
       id: 'dnsCache',
@@ -35,8 +37,8 @@ export default function PrivacyCleaner() {
       description: 'Cached DNS resolution records',
       icon: <Search className="h-5 w-5 text-cyan-400" />,
       defaultChecked: true,
-      mockSize: 2000000,
-      cmd: 'Clear-DnsClientCache; ipconfig /flushdns'
+      categoryId: 'dns-cache',
+      estimatedSize: 2000000
     },
     {
       id: 'thumbnailCache',
@@ -44,8 +46,8 @@ export default function PrivacyCleaner() {
       description: 'Cached image thumbnails from file explorer',
       icon: <Eye className="h-5 w-5 text-violet-400" />,
       defaultChecked: true,
-      mockSize: 156000000,
-      cmd: 'Remove-Item "$env:LOCALAPPDATA\\Microsoft\\Windows\\Explorer\\thumbcache_*.db" -Force -ErrorAction SilentlyContinue'
+      categoryId: 'thumbnails',
+      estimatedSize: 156000000
     },
     {
       id: 'tempFiles',
@@ -53,8 +55,8 @@ export default function PrivacyCleaner() {
       description: 'Windows and application temporary files',
       icon: <FolderOpen className="h-5 w-5 text-emerald-400" />,
       defaultChecked: true,
-      mockSize: 890000000,
-      cmd: 'Remove-Item "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item "$env:SystemRoot\\Temp\\*" -Recurse -Force -ErrorAction SilentlyContinue'
+      categoryId: 'temp-files',
+      estimatedSize: 890000000
     },
     {
       id: 'recentDocs',
@@ -62,8 +64,8 @@ export default function PrivacyCleaner() {
       description: 'List of recently accessed files and folders',
       icon: <Clock className="h-5 w-5 text-pink-400" />,
       defaultChecked: false,
-      mockSize: 15000000,
-      cmd: 'Remove-Item "$env:APPDATA\\Microsoft\\Windows\\Recent\\*" -Force -ErrorAction SilentlyContinue'
+      categoryId: 'recent-documents',
+      estimatedSize: 15000000
     },
     {
       id: 'prefetch',
@@ -71,8 +73,8 @@ export default function PrivacyCleaner() {
       description: 'Windows prefetch optimization cache',
       icon: <HardDrive className="h-5 w-5 text-orange-400" />,
       defaultChecked: false,
-      mockSize: 320000000,
-      cmd: 'Remove-Item "$env:SystemRoot\\Prefetch\\*" -Force -ErrorAction SilentlyContinue'
+      categoryId: 'prefetch',
+      estimatedSize: 320000000
     },
     {
       id: 'windowsErrorReporting',
@@ -80,8 +82,8 @@ export default function PrivacyCleaner() {
       description: 'Windows Error Reporting stored files',
       icon: <X className="h-5 w-5 text-rose-400" />,
       defaultChecked: true,
-      mockSize: 45000000,
-      cmd: 'Remove-Item "$env:ProgramData\\Microsoft\\Windows\\WER\\*" -Recurse -Force -ErrorAction SilentlyContinue'
+      categoryId: 'wer-reports',
+      estimatedSize: 45000000
     }
   ];
 
@@ -96,12 +98,15 @@ export default function PrivacyCleaner() {
   const runScan = async () => {
     setScanning(true);
     setScanResults(null);
-    await new Promise(r => setTimeout(r, 2000));
+    // Note: this is an estimate display only. The actual deletion happens via
+    // the allow-listed `privacy-clean` IPC channel which performs real removal.
+    await new Promise(r => setTimeout(r, 800));
 
     const results = privacyCategories.map(cat => ({
       ...cat,
       found: true,
-      size: cat.mockSize
+      size: cat.estimatedSize,
+      isEstimate: true
     }));
 
     setScanResults(results);
@@ -111,16 +116,35 @@ export default function PrivacyCleaner() {
   const runCleanup = async () => {
     setCleaning(true);
     const selectedItems = scanResults?.filter(item => selectedCategories[item.id]) || [];
+    let successCount = 0;
+    let failureCount = 0;
 
     for (const item of selectedItems) {
       if (window.api) {
-        await window.api.runSystemCommand('privacy-clean', [item.cmd]);
+        try {
+          const res = await window.api.runSystemCommand('privacy-clean', [item.categoryId]);
+          if (res && res.success) {
+            successCount++;
+          } else {
+            failureCount++;
+            console.warn('Privacy clean failed for', item.categoryId, res && res.error);
+          }
+        } catch (e) {
+          failureCount++;
+          console.error('Privacy clean exception for', item.categoryId, e);
+        }
+      } else {
+        await new Promise(r => setTimeout(r, 300));
+        successCount++;
       }
-      await new Promise(r => setTimeout(r, 300));
     }
 
     setCleaning(false);
     setScanResults(null);
+    if (failureCount > 0 && successCount === 0) {
+      // Caller's parent toast system will handle this; nothing else to do.
+      console.error('All privacy cleanup operations failed.');
+    }
   };
 
   const toggleCategory = (id) => {

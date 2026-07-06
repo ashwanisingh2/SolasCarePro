@@ -67,4 +67,11 @@ if (Test-Path $startupFolder) {
     }
 }
 
-$apps | ConvertTo-Json -Compress
+# Fix: empty array on PS 5.1 emits nothing via ConvertTo-Json. Force array shape.
+if (-not $apps -or $apps.Count -eq 0) {
+    Write-Output "[]"
+} elseif ($apps.Count -eq 1) {
+    Write-Output "[$($apps | ConvertTo-Json -Compress)]"
+} else {
+    Write-Output ($apps | ConvertTo-Json -Compress)
+}

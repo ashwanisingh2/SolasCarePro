@@ -44,3 +44,41 @@ temp/
 tmp/
 release/
 .eslintcache
+
+## .NET / Visual Studio (WPF sub-project)
+## Previously these patterns were missing, so 76 bin/obj build artifacts were
+## committed to git. They are now ignored and removed from tracking.
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.userprefs
+*.csproj.user
+*.cache
+*.pdb
+*.dll
+*.exe
+*.baml
+*.g.cs
+*.g.resources
+*.sourcelink.json
+*.AssemblyInfo.cs
+*.AssemblyInfoInputs.cache
+*.CoreCompileInputs.cache
+*.csproj.FileListAbsolute.txt
+*.csproj.AssemblyReference.cache
+*.assets.cache
+*.nuget.dgspec.json
+*.nuget.g.props
+*.nuget.g.targets
+project.nuget.cache
+project.assets.json
+*.GeneratedMSBuildEditorConfig.editorconfig
+*.GlobalUsings.g.cs
+*.MarkupCompile.cache
+*.MarkupCompile.lref
+*.genruntimeconfig.cache
+*_wpftmp.*
+.vs/

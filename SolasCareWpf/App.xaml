@@ -13,6 +13,11 @@
             </ResourceDictionary.MergedDictionaries>
 
             <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
+            <!-- Fix CRITICAL: BoolToVis was declared only locally in SmartScanView.xaml,
+                 so SpeedBoosterView.xaml and SettingsView.xaml threw XamlParseException
+                 ("Cannot find resource named 'BoolToVis'") on navigation, crashing the app.
+                 Declaring it here at app scope fixes both views. -->
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
             <!-- Custom Brushes and Colors based on styling rules -->
             <SolidColorBrush x:Key="BrandNavyBrush" Color="#0F172A" />

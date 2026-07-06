@@ -61,4 +61,11 @@ foreach ($e in $errors) {
 # Remove duplicate entries and group uniquely
 $uniqueDrivers = $drivers | Group-Object PnpDeviceId | ForEach-Object { $_.Group[0] }
 
-Write-Output ($uniqueDrivers | ConvertTo-Json -Compress)
+# Fix: empty array on PS 5.1 emits nothing via ConvertTo-Json. Force array shape.
+if (-not $uniqueDrivers -or $uniqueDrivers.Count -eq 0) {
+    Write-Output "[]"
+} elseif ($uniqueDrivers.Count -eq 1) {
+    Write-Output "[$($uniqueDrivers | ConvertTo-Json -Compress)]"
+} else {
+    Write-Output ($uniqueDrivers | ConvertTo-Json -Compress)
+}

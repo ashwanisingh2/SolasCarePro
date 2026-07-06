@@ -14,20 +14,21 @@ contextBridge.exposeInMainWorld('api', {
   getSystemMetrics: () => ipcRenderer.invoke('get-system-metrics'),
   getSystemInfo: () => ipcRenderer.invoke('get-system-info'),
   getDnsStatus: () => ipcRenderer.invoke('get-dns-status'),
-  
+
   // Settings Persistence
   getSetting: (key, defaultValue) => ipcRenderer.invoke('get-setting', { key, defaultValue }),
   setSetting: (key, value) => ipcRenderer.invoke('set-setting', { key, value }),
   openSaveDialog: (opts) => ipcRenderer.invoke('open-save-dialog', opts),
   openFileDialog: (opts) => ipcRenderer.invoke('open-file-dialog', opts),
-  exportSettings: (path) => ipcRenderer.invoke('export-settings', path),
-  importSettings: (path) => ipcRenderer.invoke('import-settings', path),
+  // Routed via run-system-command allow-list (handlers live in commandExecutor.js)
+  exportSettings: (filePath) => ipcRenderer.invoke('run-system-command', 'export-settings', [filePath]),
+  importSettings: (filePath) => ipcRenderer.invoke('run-system-command', 'import-settings', [filePath]),
   onSettingsCorrupted: (callback) => {
     const sub = () => callback();
     ipcRenderer.on('settings-corrupted', sub);
     return () => ipcRenderer.removeListener('settings-corrupted', sub);
   },
-  
+
   // Driver backup & files helpers
   checkDriverBackup: (id) => ipcRenderer.invoke('check-driver-backup', id),
   openLogsFolder: () => ipcRenderer.invoke('run-system-command', 'open-logs-folder', []),
@@ -36,14 +37,17 @@ contextBridge.exposeInMainWorld('api', {
 
   // Custom streaming API for terminal redirection
   onStream: (channel, callback) => {
-    const validChannels = ['sfc-out', 'winget-out', 'care-out'];
+    const validChannels = ['winget-out', 'care-out'];
     if (validChannels.includes(channel)) {
       const subscription = (event, data) => callback(data);
       ipcRenderer.on(channel, subscription);
       return () => ipcRenderer.removeListener(channel, subscription);
     }
   },
-  
+
+  // Native system notification (uses main process Notification API for tray integration)
+  showNotification: (title, body) => ipcRenderer.send('show-notification', { title, body }),
+
   killActiveProcess: () => ipcRenderer.invoke('kill-active-process'),
   minimizeWindow: () => ipcRenderer.send('minimize-window')
 });

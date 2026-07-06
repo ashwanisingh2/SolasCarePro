@@ -18,7 +18,11 @@ export default function StartupManager() {
     setLoading(true);
     try {
       if (window.api) {
-        const res = await window.api.runSystemCommand('repair-startup-cleanup');
+        // Use the correct 'get-startup-apps' channel (read-only listing).
+        // Previously this called 'repair-startup-cleanup' which is a destructive
+        // cleanup command - it would actually modify startup entries just by
+        // opening the Startup Manager tab.
+        const res = await window.api.runSystemCommand('get-startup-apps');
         if (res.success && res.stdout) {
           const apps = JSON.parse(res.stdout.trim());
           const list = Array.isArray(apps) ? apps : [apps];

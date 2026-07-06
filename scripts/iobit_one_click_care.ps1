@@ -21,7 +21,11 @@ Run-Step "Create System Restore Point" {
     if (Test-Path $registryPath) {
         Set-ItemProperty -Path $registryPath -Name "SystemRestorePointCreationFrequency" -Value 0 -ErrorAction SilentlyContinue
     }
-    Enable-ComputerRestorePoint -Drive "C:\" -ErrorAction SilentlyContinue
+    # Fix: Enable-ComputerRestorePoint is NOT a real cmdlet. The correct name
+    # is Enable-ComputerRestore (note: no "Point" suffix). Without this fix,
+    # system restore was never actually enabled before the checkpoint call,
+    # so Checkpoint-Computer would silently fail when System Protection was off.
+    Enable-ComputerRestore -Drive "C:\" -ErrorAction SilentlyContinue
     Checkpoint-Computer -Description "SolasCarePro Automated Restore Point" -RestorePointType "APPLICATION_INSTALL" -Confirm:$false
 }
 

@@ -1,6 +1,7 @@
 # repair_driver.ps1
 param (
     [string]$PnpDeviceId,
+    [ValidateSet('disable','enable','restore','rollback','update','')]
     [string]$Action,
     [bool]$SafeMode = $true
 )
@@ -8,7 +9,23 @@ param (
 $ErrorActionPreference = 'Stop'
 
 if (-not $PnpDeviceId) {
-    Write-Error "Missing required parameter: PnpDeviceId"
+    # Emit a JSON error object instead of Write-Error (which goes to stderr
+    # and leaves the app's stdout parser with nothing to parse).
+    Write-Output '{"success":false,"error":"Missing required parameter: PnpDeviceId"}'
+    exit 1
+}
+
+# Fix: $Action.ToLower() throws NullReferenceException when $Action is empty.
+# Validate explicitly first, and use a defensive null-coalesce.
+if (-not $Action) {
+    Write-Output '{"success":false,"error":"Missing required parameter: Action"}'
+    exit 1
+}
+
+# Validate PnpDeviceId format to prevent WQL/reg.exe/pnputil injection.
+# Real PnP IDs only contain alphanumerics, backslash, ampersand, underscore, dot, hyphen.
+if ($PnpDeviceId -notmatch '^[A-Za-z0-9\\&_\.\-]+$') {
+    Write-Output '{"success":false,"error":"Invalid PnpDeviceId format"}'
     exit 1
 }
 

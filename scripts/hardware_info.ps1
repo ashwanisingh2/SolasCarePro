@@ -13,9 +13,11 @@ function Get-CpuInfo {
     } catch {
         try {
             $regPath = "HKLM:\HARDWARE\DESCRIPTION\System\CentralProcessor\0"
-            $name = (Get-ItemProperty -Path $regPath).ProcessorNameString
-            $mhz = (Get-ItemProperty -Path $regPath).`~MHz`
-            $cores = [Env]::ProcessorCount
+            $props = Get-ItemProperty -Path $regPath -ErrorAction Stop
+            $name = $props.ProcessorNameString
+            $mhz = $props.'~MHz'
+            # Fix: [Env] is not a valid PowerShell type accelerator. Use [Environment] or [System.Environment].
+            $cores = [Environment]::ProcessorCount
             return @{
                 Name = $name
                 Cores = [math]::Max(1, [int]($cores / 2))
@@ -24,12 +26,14 @@ function Get-CpuInfo {
                 LoadPercent = 0
             }
         } catch {
+            # Real "unknown" — do not fabricate fake specs that the UI would
+            # display as if measured. Emit nulls and let the UI render "N/A".
             return @{
-                Name = "Unknown Intel/AMD Processor"
-                Cores = 4
-                LogicalProcessors = 8
-                MaxClockSpeedMHz = 2400
-                LoadPercent = 0
+                Name = "Unknown"
+                Cores = $null
+                LogicalProcessors = $null
+                MaxClockSpeedMHz = $null
+                LoadPercent = $null
             }
         }
     }
@@ -199,9 +203,11 @@ function Get-MotherboardInfo {
 function Get-BiosInfo {
     try {
         $bios = Get-CimInstance -ClassName Win32_BIOS -ErrorAction Stop | Select-Object -First 1
-        $releaseDate = $bios.ReleaseDate
-        if ($bios.ReleaseDate -and $bios.ReleaseDate.Length -ge 8) {
-            $releaseDate = $bios.ReleaseDate.Substring(0, 4) + "-" + $bios.ReleaseDate.Substring(4, 2) + "-" + $bios.ReleaseDate.Substring(6, 2)
+        # Fix: Win32_BIOS.ReleaseDate from Get-CimInstance is a DateTime, not a string.
+        # The previous `.Length -ge 8` check was dead code (DateTime.Length is $null).
+        $releaseDate = $null
+        if ($bios.ReleaseDate) {
+            try { $releaseDate = ([datetime]$bios.ReleaseDate).ToString("yyyy-MM-dd") } catch { $releaseDate = $null }
         }
         return @{
             Manufacturer = $bios.Manufacturer

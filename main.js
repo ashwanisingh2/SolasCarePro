@@ -1,5 +1,7 @@
 // squirrel startup hook check
-if (require('electron-squirrel-startup')) return;
+if (require('electron-squirrel-startup')) {
+  process.exit(0);
+}
 
 const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, shell, nativeImage, Notification } = require('electron');
 const path = require('path');
@@ -10,8 +12,8 @@ const { initCommandExecutor, executeAllowedCommand, killActiveProcess, getScript
 
 let mainWindow;
 let tray = null;
-const logDir = path.join(process.env.APPDATA, 'SolasCare', 'logs');
-const reportsDir = path.join(process.env.APPDATA, 'SolasCare', 'reports');
+const logDir = path.join(process.env.APPDATA || './', 'SolasCare', 'logs');
+const reportsDir = path.join(process.env.APPDATA || './', 'SolasCare', 'reports');
 
 // Create log directory
 if (!fs.existsSync(logDir)) {
@@ -21,15 +23,40 @@ if (!fs.existsSync(reportsDir)) {
   fs.mkdirSync(reportsDir, { recursive: true });
 }
 
-const logFile = path.join(logDir, `solas_care_${new Date().toISOString().split('T')[0]}.log`);
+// Audit log uses a fixed filename; the daily log filename is computed on each write
+// so a long-running process rolls over to a new file at midnight.
 const auditFile = path.join(logDir, 'audit.log');
+
+// Tiny write queue to avoid blocking the main thread on synchronous file I/O.
+// We coalesce writes into a single appendFile call per tick.
+const writeQueue = new Map(); // file -> string[]
+let writeFlushScheduled = false;
+function flushWrites() {
+  writeFlushScheduled = false;
+  for (const [file, lines] of writeQueue.entries()) {
+    if (lines.length === 0) continue;
+    const payload = lines.join('');
+    lines.length = 0;
+    fs.promises.appendFile(file, payload, 'utf8').catch((e) => {
+      console.error('Log write failed for', file, ':', e.message);
+    });
+  }
+}
+function queueWrite(file, payload) {
+  if (!writeQueue.has(file)) writeQueue.set(file, []);
+  writeQueue.get(file).push(payload);
+  if (!writeFlushScheduled) {
+    writeFlushScheduled = true;
+    setImmediate(flushWrites);
+  }
+}
 
 function writeLog(level, message) {
   const logMsg = `[${new Date().toISOString()}] [${level}] ${message}\n`;
   console.log(logMsg.trim());
-  try {
-    fs.appendFileSync(logFile, logMsg, 'utf8');
-  } catch(e) {}
+  const today = new Date().toISOString().split('T')[0];
+  const logFile = path.join(logDir, `solas_care_${today}.log`);
+  queueWrite(logFile, logMsg);
 }
 
 function writeAudit(action, details, result) {
@@ -41,11 +68,7 @@ function writeAudit(action, details, result) {
     error: result?.error || result?.stderr || null,
     user: process.env.USERNAME || process.env.USER || 'unknown'
   };
-  try {
-    fs.appendFileSync(auditFile, JSON.stringify(entry) + '\n', 'utf8');
-  } catch (e) {
-    writeLog('ERROR', 'Failed to write audit log: ' + e.message);
-  }
+  queueWrite(auditFile, JSON.stringify(entry) + '\n');
 }
 
 // 1. Settings persistence store
@@ -159,19 +182,28 @@ function relaunchAsAdmin() {
   writeLog('INFO', 'Relaunching application as Administrator...');
   const exePath = process.argv[0];
   const args = process.argv.slice(1);
-  
-  const argsString = args.map(a => `"${a}"`).join(',');
-  const command = `Start-Process -FilePath "${exePath}" -ArgumentList ${argsString || '""'} -Verb RunAs`;
-  
+
+  // Build a proper PowerShell array literal so any arg containing quotes, commas,
+  // or $ survives -ArgumentList parsing intact. Single-quote-escape each arg.
+  const psArgs = args
+    .map((a) => "'" + String(a).replace(/'/g, "''") + "'")
+    .join(',');
+  const safeExe = String(exePath).replace(/'/g, "''");
+  const command = `Start-Process -FilePath '${safeExe}' -ArgumentList @(${psArgs}) -Verb RunAs`;
+
   spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command], {
     detached: true,
     stdio: 'ignore'
   }).unref();
-  
+
   app.quit();
 }
 
-// 2. PowerShell block check & bypass
+// 2. PowerShell block check
+// NOTE: Set-ExecutionPolicy -Scope Process has no effect on later spawned
+// powershell.exe children (each spawn already passes -ExecutionPolicy Bypass).
+// We only probe the policy here for diagnostics; the bypass is enforced per-spawn
+// in commandExecutor.js.
 let isPowerShellBlocked = false;
 let systemExecutionPolicy = 'Bypass';
 
@@ -187,13 +219,7 @@ function checkPowerShellAccess() {
         const policy = stdout.trim();
         systemExecutionPolicy = policy;
         if (policy === 'Restricted') {
-          writeLog('INFO', 'PowerShell execution policy is Restricted. Bypassing for this process...');
-          // Silently set process scope bypass
-          exec('powershell.exe -NoProfile -Command "Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force"', (setErr) => {
-            if (setErr) {
-              writeLog('WARN', 'Failed to set Scope Process Bypass. PowerShell might fail.');
-            }
-          });
+          writeLog('INFO', 'System PowerShell policy is Restricted; per-spawn -ExecutionPolicy Bypass will be applied.');
         }
         isPowerShellBlocked = false;
         resolve(true);
@@ -327,19 +353,45 @@ async function createWindow() {
     });
     mainWindow.webContents.on('before-input-event', (event, input) => {
       const key = String(input.key || '').toLowerCase();
-      if (input.key === 'F12' || (input.control && input.shift && key === 'i')) {
+      // Block F12, Ctrl+Shift+I, Ctrl+Shift+J (console), and Ctrl+R (reload) in production.
+      if (input.key === 'F12' ||
+          (input.control && input.shift && (key === 'i' || key === 'j')) ||
+          (input.control && key === 'r')) {
         event.preventDefault();
       }
     });
   }
 
+  // Stricter will-navigate guard: only allow same-origin navigation, deny everything else.
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (url !== mainWindow.webContents.getURL()) {
+    const currentUrl = mainWindow.webContents.getURL();
+    if (!currentUrl) {
+      // During initial load, only allow the expected origin.
+      const expected = app.isPackaged
+        ? `file://${path.join(__dirname, 'dist', 'index.html').replace(/\\/g, '/')}`
+        : process.env.VITE_DEV_SERVER_URL;
+      if (expected && !url.startsWith(expected)) {
+        event.preventDefault();
+        writeLog('WARN', 'Blocked navigation to: ' + url);
+      }
+      return;
+    }
+    try {
+      const a = new URL(url);
+      const b = new URL(currentUrl);
+      if (a.origin !== b.origin) {
+        event.preventDefault();
+        writeLog('WARN', 'Blocked cross-origin navigation to: ' + url);
+      }
+    } catch {
       event.preventDefault();
     }
   });
 
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    writeLog('WARN', 'Blocked window.open to: ' + url);
+    return { action: 'deny' };
+  });
 
   if (!app.isPackaged && process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -364,8 +416,38 @@ async function createWindow() {
   }, 5000);
 }
 
-app.whenReady().then(() => {
-  createWindow();
+// Single-instance lock: prevents concurrent instances from racing on settings,
+// audit log, scheduled task, and PowerShell script files.
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+  return;
+}
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
+// `before-quit` ensures the close handler in createWindow stops intercepting
+// OS shutdown / Alt+F4 / app.quit() once the user actually wants to exit.
+// Without this, minimising to tray once is enough to permanently block logoff.
+app.on('before-quit', () => {
+  app.isQuitting = true;
+  if (tray) {
+    try { tray.destroy(); } catch (e) {}
+    tray = null;
+  }
+});
+
+app.whenReady().then(createWindow).catch((err) => {
+  console.error('Failed to start Solas Care Pro:', err);
+  try {
+    dialog.showErrorBox('Startup Error', err && err.message ? err.message : String(err));
+  } catch (_) {}
+  app.quit();
 });
 
 app.on('window-all-closed', () => {
@@ -395,6 +477,9 @@ ipcMain.handle('is-admin', async () => {
 
 // IPC Handler - Check Driver Backup Reg File Exists
 ipcMain.handle('check-driver-backup', (event, pnpDeviceId) => {
+  if (typeof pnpDeviceId !== 'string' || !pnpDeviceId) {
+    return false;
+  }
   const safeId = pnpDeviceId.replace(/[^a-zA-Z0-9]/g, '_');
   const backupFile = path.join(process.env.TEMP || 'C:\\Windows\\Temp', `solas_driver_backup_${safeId}.reg`);
   return fs.existsSync(backupFile);
@@ -422,13 +507,12 @@ ipcMain.handle('kill-active-process', () => {
 });
 
 // 4. Live DNS and WMI System Info Handlers
-let globalDnsStatus = 'Original';
-
+// NOTE: The `globalDnsStatus` variable is intentionally removed - it was never
+// written to by any code path, so the 'Restoring' branch was dead. The status
+// is inferred from the existence of the DNS backup file. commandExecutor.js
+// should write/remove this file as part of network-reset / flush-dns flows.
 ipcMain.handle('get-dns-status', () => {
   const tempPath = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'solas_dns_backup.json');
-  if (globalDnsStatus === 'Restoring') {
-    return 'Restoring...';
-  }
   if (fs.existsSync(tempPath)) {
     return 'Temporary (Google)';
   }
@@ -438,7 +522,7 @@ ipcMain.handle('get-dns-status', () => {
 ipcMain.handle('get-system-info', async () => {
   const release = os.release();
   const platform = os.platform();
-  const majorVersion = parseInt(release.split('.')[0]);
+  const majorVersion = parseInt(release.split('.')[0], 10);
   const isLegacyWin = majorVersion < 10;
   
   let osName = 'Windows (Legacy)';
@@ -470,22 +554,27 @@ ipcMain.handle('set-setting', (event, { key, value }) => {
   return true;
 });
 
-ipcMain.handle('open-save-dialog', async (event, { title, defaultPath, filters }) => {
+ipcMain.handle('open-save-dialog', async (event, { title, defaultPath, filters } = {}) => {
   try {
-    const result = await dialog.showSaveDialog(mainWindow, { title, defaultPath, filters });
+    // Prefer the window that sent the request so we don't pass a stale reference
+    const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+    if (!win) return { canceled: true };
+    const result = await dialog.showSaveDialog(win, { title, defaultPath, filters });
     return result;
   } catch (e) {
-    console.error('Error opening save dialog:', e);
+    writeLog('ERROR', 'Error opening save dialog: ' + e.message);
     return { canceled: true };
   }
 });
 
-ipcMain.handle('open-file-dialog', async (event, { title, filters }) => {
+ipcMain.handle('open-file-dialog', async (event, { title, filters } = {}) => {
   try {
-    const result = await dialog.showOpenDialog(mainWindow, { title, filters, properties: ['openFile'] });
+    const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+    if (!win) return { canceled: true, filePaths: [] };
+    const result = await dialog.showOpenDialog(win, { title, filters, properties: ['openFile'] });
     return result;
   } catch (e) {
-    console.error('Error opening open dialog:', e);
+    writeLog('ERROR', 'Error opening open dialog: ' + e.message);
     return { canceled: true, filePaths: [] };
   }
 });
@@ -575,13 +664,29 @@ ipcMain.handle('get-system-metrics', async () => {
 });
 
 // 6. Background Scheduled Task Monitor and System Notifications
+// Resolve the icon from multiple candidate locations so it works both in dev
+// and in packaged builds (asar + asar.unpacked).
+function resolveAppIcon() {
+  const candidates = [
+    path.join(__dirname, 'icon.png'),
+    path.join(__dirname, '..', 'icon.png'),
+    path.join(app.getAppPath(), 'icon.png'),
+    path.join(process.resourcesPath || '', 'icon.png')
+  ];
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch (_) {}
+  }
+  return null;
+}
+
 function showSystemNotification(title, body) {
   if (Notification.isSupported()) {
-    const notification = new Notification({
-      title,
-      body,
-      icon: path.join(__dirname, 'icon.png')
-    });
+    const iconPath = resolveAppIcon();
+    const opts = { title, body };
+    if (iconPath) opts.icon = iconPath;
+    const notification = new Notification(opts);
     notification.show();
   }
 }
@@ -613,6 +718,7 @@ function checkBackgroundScheduledTask() {
   }
 }
 
-ipcMain.on('show-notification', (event, { title, body }) => {
+ipcMain.on('show-notification', (event, { title, body } = {}) => {
+  if (typeof title !== 'string' || typeof body !== 'string') return;
   showSystemNotification(title, body);
 });

@@ -64,9 +64,11 @@ namespace SolasCareWpf.ViewModels
         {
             Task.Run(async () =>
             {
-                var cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-                var ramCounter = new PerformanceCounter("Memory", "Available MBytes");
-                
+                // Fix HIGH: PerformanceCounter holds a native handle - wrap in
+                // `using` at loop scope so the handles are released on cancellation.
+                using var cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+                using var ramCounter = new PerformanceCounter("Memory", "Available MBytes");
+
                 // Get Total RAM
                 double totalRamMb = 8192; // default fallback 8GB
                 try
@@ -118,9 +120,14 @@ namespace SolasCareWpf.ViewModels
                             HealthColor = HealthScore > 80 ? "#34D399" : (HealthScore > 60 ? "#FBBF24" : "#F87171");
                         });
                     }
+                    catch (OperationCanceledException) { break; }
                     catch { }
 
-                    await Task.Delay(2000, _cts.Token);
+                    try
+                    {
+                        await Task.Delay(2000, _cts.Token);
+                    }
+                    catch (OperationCanceledException) { break; }
                 }
             }, _cts.Token);
         }

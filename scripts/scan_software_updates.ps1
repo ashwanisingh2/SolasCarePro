@@ -8,8 +8,15 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
 
 $tempFile = [System.IO.Path]::GetTempFileName()
 try {
-    $process = Start-Process winget -ArgumentList "upgrade --accept-source-agreements" -NoNewWindow -PassThru -RedirectStandardOutput $tempFile -RedirectStandardError "$tempFile.err"
-    $process.WaitForExit()
+    # Fix: add --accept-package-agreements and --disable-interactivity so winget
+    # does not block on an interactive prompt when stdout is redirected.
+    # Add a 60-second timeout so a hung winget doesn't block the UI forever.
+    $process = Start-Process winget -ArgumentList "upgrade --accept-source-agreements --accept-package-agreements --disable-interactivity" -NoNewWindow -PassThru -RedirectStandardOutput $tempFile -RedirectStandardError "$tempFile.err"
+    if (-not $process.WaitForExit(60000)) {
+        try { $process.Kill() } catch {}
+        Write-Output "[]"
+        exit 0
+    }
 
     if (-not (Test-Path $tempFile)) {
         Write-Output "[]"
@@ -61,4 +68,11 @@ foreach ($line in $lines) {
     }
 }
 
-Write-Output ($updates | ConvertTo-Json -Compress)
+# Fix: empty array on PS 5.1 emits nothing via ConvertTo-Json. Force array shape.
+if (-not $updates -or $updates.Count -eq 0) {
+    Write-Output "[]"
+} elseif ($updates.Count -eq 1) {
+    Write-Output "[$($updates | ConvertTo-Json -Compress)]"
+} else {
+    Write-Output ($updates | ConvertTo-Json -Compress)
+}

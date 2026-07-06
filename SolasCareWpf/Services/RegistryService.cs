@@ -32,7 +32,13 @@ namespace SolasCareWpf.Services
 
                 using (var process = Process.Start(psi))
                 {
-                    process.WaitForExit(5000);
+                    // Fix HIGH: WaitForExit(int) returns false on timeout - reading
+                    // ExitCode on a still-running process throws InvalidOperationException.
+                    if (!process.WaitForExit(5000))
+                    {
+                        try { process.Kill(); } catch { }
+                        return false;
+                    }
                     return process.ExitCode == 0;
                 }
             }
@@ -59,7 +65,11 @@ namespace SolasCareWpf.Services
 
                 using (var process = Process.Start(psi))
                 {
-                    process.WaitForExit(5000);
+                    if (!process.WaitForExit(5000))
+                    {
+                        try { process.Kill(); } catch { }
+                        return false;
+                    }
                     return process.ExitCode == 0;
                 }
             }

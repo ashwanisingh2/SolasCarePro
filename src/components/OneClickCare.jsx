@@ -124,21 +124,24 @@ function OneClickCare() {
     return () => clearInterval(timerRef.current);
   }, [timerActive]);
 
-  // Junk Undo Timer
+  // Junk Undo Timer — keeps the interval pure (no side effects inside setState).
   useEffect(() => {
-    if (currentStep === 'junk-undo' && undoSecondsLeft > 0) {
-      undoIntervalRef.current = setInterval(() => {
-        setUndoSecondsLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(undoIntervalRef.current);
-            commitJunkCleanup(); // Commit changes automatically
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
+    if (currentStep !== 'junk-undo' || undoSecondsLeft <= 0) return;
+    undoIntervalRef.current = setInterval(() => {
+      setUndoSecondsLeft(prev => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
     return () => clearInterval(undoIntervalRef.current);
+  }, [currentStep, undoSecondsLeft]);
+
+  // When the undo countdown hits zero, automatically commit the cleanup.
+  // Splitting this out of the interval keeps the setState updater pure
+  // (StrictMode double-invokes updaters in dev, which would otherwise call
+  // commitJunkCleanup twice).
+  useEffect(() => {
+    if (currentStep === 'junk-undo' && undoSecondsLeft === 0) {
+      commitJunkCleanup();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, undoSecondsLeft]);
 
   // Load drives configuration on mount
@@ -329,7 +332,6 @@ function OneClickCare() {
     clearInterval(undoIntervalRef.current);
     try {
       if (window.api && backupDir) {
-        setStatusMessage('Undoing file deletion...');
         await window.api.runSystemCommand('junk-undo', [backupDir]);
       }
     } catch (e) {
@@ -343,11 +345,11 @@ function OneClickCare() {
     clearInterval(undoIntervalRef.current);
     try {
       if (window.api && backupDir) {
-        // Run commit in background
-        window.api.runSystemCommand('junk-commit', [backupDir]);
+        // Await commit so any error is surfaced; previously this was fire-and-forget.
+        await window.api.runSystemCommand('junk-commit', [backupDir]);
       }
     } catch (e) {
-      console.error(e);
+      console.error('Junk commit failed:', e);
     }
     // Proceed
     runNetworkCheckStage();

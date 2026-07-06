@@ -50,9 +50,20 @@ export default function SettingsView({ theme, setTheme }) {
     }
   };
 
-  const handleClearLogs = () => {
-    setStatusMessage('Log cache directory cleared successfully.');
-    setTimeout(() => setStatusMessage(''), 3000);
+  const handleClearLogs = async () => {
+    if (window.api) {
+      try {
+        // Open the logs folder so the user can manually clear old log files.
+        // We don't auto-delete because logs are useful for forensic analysis.
+        await window.api.openLogsFolder();
+        setStatusMessage('Logs folder opened. Delete old log files manually if needed.');
+      } catch (e) {
+        setStatusMessage('Failed to open logs folder: ' + e.message);
+      }
+    } else {
+      setStatusMessage('Log folder only available in desktop mode.');
+    }
+    setTimeout(() => setStatusMessage(''), 4000);
   };
 
   const handleExportSettings = async () => {
@@ -149,7 +160,7 @@ export default function SettingsView({ theme, setTheme }) {
                 <p className="text-[10px] text-slate-500 mt-0.5">Toggle interface design palettes</p>
               </div>
               <div className="flex gap-2">
-                {['dark', 'cyan', 'light'].map(t => (
+                {['dark', 'light'].map(t => (
                   <button
                     key={t}
                     onClick={() => updateSetting('theme', t, setTheme)}

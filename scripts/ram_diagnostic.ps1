@@ -52,9 +52,11 @@ elseif ($Action -eq 'check-result') {
                 $resultText = "Hardware problems detected"
             } else {
                 $msg = $latest.Message.ToLower()
-                if ($msg -contains "no errors" -or $msg -contains "passed") {
+                # Fix: `-contains` tests collection membership, not substring match.
+                # For substring matching use `-match` (regex) or `-like` (wildcard).
+                if ($msg -match "no errors" -or $msg -match "passed") {
                     $resultText = "No errors found"
-                } elseif ($msg -contains "error" -or $msg -contains "fail" -or $msg -contains "hardware") {
+                } elseif ($msg -match "error" -or $msg -match "fail" -or $msg -match "hardware") {
                     $resultText = "Hardware problems detected"
                 } else {
                     $resultText = "Test incomplete"

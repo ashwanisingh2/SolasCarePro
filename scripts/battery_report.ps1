@@ -79,34 +79,37 @@ if (-not $parsedSuccessfully) {
 # Clean up report HTML file
 if (Test-Path $reportPath) { Remove-Item $reportPath -Force }
 
-# Default values if still zero to prevent division by zero or empty dashboard
-if ($designCapacity -eq 0) { $designCapacity = 50000 }
-if ($fullChargeCapacity -eq 0) { $fullChargeCapacity = 47500 }
-if ($cycleCount -eq 0) { $cycleCount = 45 }
-if ($chemistry -eq "Unknown") { $chemistry = "LION" }
-
-$healthPercent = [Math]::Round(($fullChargeCapacity / $designCapacity) * 100, 1)
-
-# Generate realistic capacity history based on current full charge capacity
-$capacityHistory = @()
-$date = Get-Date
-for ($i = 5; $i -ge 0; $i--) {
-    $capacityHistory += @{
-        Period = $date.AddMonths(-$i).ToString("MMM yyyy")
-        Capacity = [Math]::Max(1000, $fullChargeCapacity - ($i * 350))
-    }
+# Fix: previously the script fabricated realistic-looking defaults (50000 mAh,
+# 47500 mAh, 45 cycles, "LION") when parsing failed, and synthesized a fake
+# 6-month capacity history. The UI then displayed these as real measurements,
+# misleading users. Now we surface a `parsedSuccessfully=false` flag and let
+# the UI render "N/A" instead of fake numbers.
+$parsedSuccessfully = ($designCapacity -gt 0 -and $fullChargeCapacity -gt 0)
+if (-not $parsedSuccessfully) {
+    $designCapacity = 0
+    $fullChargeCapacity = 0
+    $cycleCount = 0
 }
 
+$healthPercent = if ($designCapacity -gt 0) {
+    [Math]::Round(($fullChargeCapacity / $designCapacity) * 100, 1)
+} else { 0 }
+
+# Real capacity history comes from the battery report HTML. Without parsing it,
+# we emit an empty array - do NOT fabricate linear-subtraction history.
+$capacityHistory = @()
+
 $report = @{
-    BatteryPresent     = $true
-    DesignCapacity     = $designCapacity
-    FullChargeCapacity = $fullChargeCapacity
-    HealthPercent      = $healthPercent
-    CycleCount         = $cycleCount
-    Chemistry          = $chemistry
-    ChargePercent      = $chargePercent
-    IsCharging         = $isCharging
-    History            = $capacityHistory
+    BatteryPresent      = $true
+    ParsedSuccessfully  = $parsedSuccessfully
+    DesignCapacity      = $designCapacity
+    FullChargeCapacity  = $fullChargeCapacity
+    HealthPercent       = $healthPercent
+    CycleCount          = $cycleCount
+    Chemistry           = $chemistry
+    ChargePercent       = $chargePercent
+    IsCharging          = $isCharging
+    History             = $capacityHistory
 }
 
 Write-Output ($report | ConvertTo-Json -Compress)

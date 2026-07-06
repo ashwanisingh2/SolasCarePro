@@ -21,7 +21,7 @@ export default function HistoryLogs() {
     try {
       if (window.api) {
         const result = await window.api.runSystemCommand('read-repair-history');
-        if (result.success && result.stdout) {
+        if (result.success && result.stdout && result.stdout.trim()) {
           setRawText(result.stdout);
           const lines = result.stdout.trim().split('\n').filter(Boolean);
           const parsed = lines.map((line, idx) => {
@@ -34,17 +34,21 @@ export default function HistoryLogs() {
           setHistory(parsed);
           setStatus(`Loaded ${lines.length} repair entries.`);
         } else {
-          setMockHistory();
-          setStatus('No physical history logs. Displaying mock entries.');
+          // Real history is empty - do NOT show mock data here (misleading).
+          // Only show mocks in pure-web (non-Electron) preview mode below.
+          setHistory([]);
+          setRawText('');
+          setStatus('No repair history yet. Run a repair operation to populate this log.');
         }
       } else {
         setMockHistory();
-        setStatus('Web check: Mock history entries loaded.');
+        setStatus('Web preview: showing sample entries (not connected to Electron).');
       }
     } catch (error) {
       console.error('Failed to load history:', error);
       setStatus(`Failed to read history: ${error.message}`);
-      setMockHistory();
+      setHistory([]);
+      setRawText('');
     } finally {
       setLoading(false);
     }

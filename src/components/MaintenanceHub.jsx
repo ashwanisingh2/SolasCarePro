@@ -84,14 +84,10 @@ export default function MaintenanceHub() {
           
           setUndoSeconds(30);
           undoIntervalRef.current = setInterval(() => {
-            setUndoSeconds(prev => {
-              if (prev <= 1) {
-                clearInterval(undoIntervalRef.current);
-                commitCleanup(cleanRes.BackupDir);
-                return 0;
-              }
-              return prev - 1;
-            });
+            // Pure updater - no side effects. The auto-commit when the timer
+            // hits zero is handled by a separate useEffect below (avoids
+            // StrictMode double-invoke of updaters from calling commitCleanup twice).
+            setUndoSeconds(prev => (prev <= 1 ? 0 : prev - 1));
           }, 1000);
           addNotification('Clean Complete', 'Selected temporary files moved to temporary backup directory.', 'success');
         } else {
@@ -105,13 +101,7 @@ export default function MaintenanceHub() {
         });
         setUndoSeconds(5);
         undoIntervalRef.current = setInterval(() => {
-          setUndoSeconds(prev => {
-            if (prev <= 1) {
-              clearInterval(undoIntervalRef.current);
-              return 0;
-            }
-            return prev - 1;
-          });
+          setUndoSeconds(prev => (prev <= 1 ? 0 : prev - 1));
         }, 1000);
       }
     } catch (e) {
@@ -121,6 +111,15 @@ export default function MaintenanceHub() {
       setCleaning(false);
     }
   };
+
+  // Auto-commit the cleanup when the undo countdown reaches zero. Splitting
+  // this out of the interval keeps the setState updater pure.
+  useEffect(() => {
+    if (undoSeconds === 0 && backupDir) {
+      commitCleanup(backupDir);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undoSeconds, backupDir]);
 
   const undoCleanup = async () => {
     if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);

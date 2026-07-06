@@ -81,14 +81,20 @@ function runChildProcess(executable, args, options = {}) {
     });
     activeChildProcesses.add(child);
 
+    // Helper to kill the child + its descendant tree (PowerShell may spawn sfc/dism/etc).
+    const killTree = () => {
+      try { child.kill('SIGTERM'); } catch (_) {}
+      if (child.pid) {
+        exec(`taskkill /F /T /PID ${child.pid}`, (err) => {
+          if (err) log('WARN', `taskkill failed for PID ${child.pid}: ${err.message}`);
+        });
+      }
+    };
+
     const timeout = options.timeout
       ? setTimeout(() => {
-          try {
-            child.kill('SIGTERM');
-            exec(`taskkill /F /T /PID ${child.pid}`);
-          } catch (e) {
-            log('ERROR', 'Failed to timeout child process: ' + e.message);
-          }
+          log('WARN', 'Child process timed out, killing process tree.');
+          killTree();
         }, options.timeout)
       : null;
 
@@ -138,7 +144,11 @@ function killActiveProcess() {
     for (const child of activeChildProcesses) {
       try {
         child.kill('SIGTERM');
-        exec(`taskkill /F /T /PID ${child.pid}`);
+        if (child.pid) {
+          exec(`taskkill /F /T /PID ${child.pid}`, (err) => {
+            if (err) log('WARN', `taskkill failed during cancellation: ${err.message}`);
+          });
+        }
       } catch (e) {
         log('ERROR', 'Error killing process: ' + e.message);
       }
@@ -185,13 +195,29 @@ async function executeAllowedCommand(commandKey, rawArgs, options = {}) {
   // Wrap script run in a command block that configures output encoding to UTF8
   const scriptCall = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; & '${scriptPath}' ${scriptArgs.map(arg => `'${String(arg).replace(/'/g, "''")}'`).join(' ')}`;
   
-  return await runChildProcess(getPowershellPath(), [
+  const result = await runChildProcess(getPowershellPath(), [
     '-NoProfile',
     '-ExecutionPolicy',
     'Bypass',
     '-Command',
     scriptCall
   ], { timeout: cmd.timeout, streamChannel });
+
+  // If the command opted into temp-file cleanup, remove any solas_junk_*.json
+  // files that were created as input manifests. Best-effort, never throws.
+  if (cmd.cleanupTempFiles) {
+    try {
+      const tempDir = process.env.TEMP || 'C:\\Windows\\Temp';
+      const entries = fs.readdirSync(tempDir);
+      for (const entry of entries) {
+        if (/^solas_junk_.*\.json$/.test(entry)) {
+          try { fs.unlinkSync(path.join(tempDir, entry)); } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
+  return result;
 }
 
 const VALID_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -307,11 +333,14 @@ const ALLOWED_COMMANDS = {
       if (!Array.isArray(parsed) || parsed.some(p => typeof p !== 'string')) {
         throw new Error('Invalid cleanup paths.');
       }
-      // Save files list to a temporary JSON file to avoid command-line character limitations
+      // Save files list to a temporary JSON file to avoid command-line character limitations.
       const tempPath = path.join(process.env.TEMP || 'C:\\Windows\\Temp', `solas_junk_${Date.now()}.json`);
       fs.writeFileSync(tempPath, filesJson, 'utf8');
       return ['-Action', 'clean', '-FilesPath', tempPath];
-    }
+    },
+    // The temp JSON file is cleaned up after the script completes (success or failure)
+    // to avoid leaking solas_junk_*.json files into %TEMP% forever.
+    cleanupTempFiles: true
   },
   'junk-undo': {
     type: 'script',
@@ -324,6 +353,11 @@ const ALLOWED_COMMANDS = {
     script: 'junk_cleanup.ps1',
     timeout: 120000,
     buildArgs: ([backupDir]) => ['-Action', 'commit', '-BackupDir', validateTempBackupDir(backupDir)]
+  },
+  'get-startup-apps': {
+    type: 'script',
+    script: 'get_startup_apps.ps1',
+    timeout: 15000
   },
   'network-check': {
     type: 'script',
@@ -882,11 +916,21 @@ const ALLOWED_COMMANDS = {
     timeout: 15000,
     confirmationRequired: true,
     confirmationMessage: 'This will change your power plan. Continue?',
-    buildCommand: ([plan]) => {
-      if (typeof plan !== 'string' || !plan.startsWith('powercfg')) {
-        throw new Error('Invalid power plan command.');
+    buildCommand: ([planKey]) => {
+      // Allow-listed power plans only - never accept raw `powercfg` strings.
+      const ALLOWED_PLANS = {
+        'balanced': '/setactive SCHEME_BALANCED',
+        'high':     '/setactive SCHEME_MIN',
+        'saver':    '/setactive SCHEME_MAX',
+        'power-saver': '/setactive SCHEME_MAX',
+        'high-performance': '/setactive SCHEME_MIN'
+      };
+      const key = String(planKey || '').toLowerCase();
+      const arg = ALLOWED_PLANS[key];
+      if (!arg) {
+        throw new Error('Invalid power plan. Allowed: balanced, high, saver.');
       }
-      return plan;
+      return `powercfg ${arg}`;
     }
   },
   'disable-background-apps': {
@@ -913,8 +957,28 @@ const ALLOWED_COMMANDS = {
     timeout: 60000,
     confirmationRequired: true,
     confirmationMessage: 'This will delete browser data and system traces. Continue?',
-    buildCommand: ([cmd]) => {
-      if (typeof cmd !== 'string' || cmd.length > 5000) throw new Error('Invalid command.');
+    buildCommand: ([categoryId]) => {
+      // Allow-listed privacy categories only - never accept raw PowerShell strings.
+      const CATEGORIES = {
+        'browser-history':     'Remove-Item "$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\History" -Force -ErrorAction SilentlyContinue; Remove-Item "$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\History" -Force -ErrorAction SilentlyContinue',
+        'browser-cookies':     'Remove-Item "$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\Cookies" -Force -ErrorAction SilentlyContinue; Remove-Item "$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\Cookies" -Force -ErrorAction SilentlyContinue',
+        'browser-cache':       'Remove-Item "$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\Cache\\*" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item "$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\Cache\\*" -Recurse -Force -ErrorAction SilentlyContinue',
+        'browser-form-data':   'Remove-Item "$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\Login Data" -Force -ErrorAction SilentlyContinue; Remove-Item "$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\Login Data" -Force -ErrorAction SilentlyContinue',
+        'dns-cache':           'Clear-DnsClientCache; ipconfig /flushdns',
+        'recycle-bin':         'Clear-RecycleBin -Force -ErrorAction SilentlyContinue',
+        'temp-files':          'Remove-Item "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue',
+        'recent-documents':    'Remove-Item "$env:APPDATA\\Microsoft\\Windows\\Recent\\*" -Recurse -Force -ErrorAction SilentlyContinue',
+        'thumbnails':          'Remove-Item "$env:LOCALAPPDATA\\Microsoft\\Windows\\Explorer\\thumbcache_*.db" -Force -ErrorAction SilentlyContinue',
+        'prefetch':            'Remove-Item "$env:SystemRoot\\Prefetch\\*" -Force -ErrorAction SilentlyContinue',
+        'wer-reports':         'Remove-Item "$env:ProgramData\\Microsoft\\Windows\\WER\\*" -Recurse -Force -ErrorAction SilentlyContinue',
+        'windows-event-logs':  'wevtutil el | ForEach-Object { wevtutil cl \"$_\" }',
+        'powershell-history':  'Remove-Item (Get-PSReadlineOption).HistorySavePath -Force -ErrorAction SilentlyContinue'
+      };
+      const key = String(categoryId || '').toLowerCase();
+      const cmd = CATEGORIES[key];
+      if (!cmd) {
+        throw new Error('Invalid privacy category. Allowed: ' + Object.keys(CATEGORIES).join(', '));
+      }
       return cmd;
     }
   },
@@ -935,9 +999,22 @@ const ALLOWED_COMMANDS = {
     buildCommand: ([filesJson]) => {
       const files = JSON.parse(filesJson);
       if (!Array.isArray(files)) throw new Error('Invalid files list.');
+      // Reject paths under system directories to prevent accidental system damage.
+      const FORBIDDEN_PREFIXES = [
+        'C:\\Windows\\', 'C:\\Program Files\\', 'C:\\Program Files (x86)\\',
+        'C:\\ProgramData\\', 'C:\\System Volume Information\\', 'C:\\$Recycle.Bin\\'
+      ];
       const deletes = files.map(f => {
-        const escaped = f.replace(/"/g, '\"');
-        return `Remove-Item "${escaped}" -Force -ErrorAction SilentlyContinue`;
+        if (typeof f !== 'string' || !f) throw new Error('Invalid file path.');
+        const resolved = path.resolve(f);
+        for (const prefix of FORBIDDEN_PREFIXES) {
+          if (resolved.toLowerCase().startsWith(prefix.toLowerCase())) {
+            throw new Error('Security: Refusing to delete system path: ' + resolved);
+          }
+        }
+        // PowerShell-safe single-quoted literal.
+        const safe = resolved.replace(/'/g, "''");
+        return `Remove-Item -LiteralPath '${safe}' -Force -ErrorAction SilentlyContinue`;
       });
       return deletes.join('; ');
     }

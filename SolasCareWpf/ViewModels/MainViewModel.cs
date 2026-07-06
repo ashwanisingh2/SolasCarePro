@@ -4,7 +4,11 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace SolasCareWpf.ViewModels
 {
-    public partial class MainViewModel : ObservableObject
+    // Fix HIGH: MainViewModel now implements IDisposable so the DashboardViewModel
+    // (which owns a polling Task + PerformanceCounters + CancellationTokenSource)
+    // can be properly cleaned up when MainWindow closes. Previously the polling
+    // task ran forever until process exit.
+    public partial class MainViewModel : ObservableObject, IDisposable
     {
         private readonly DashboardViewModel _dashboardVm;
         private readonly SmartScanViewModel _smartScanVm;
@@ -13,6 +17,7 @@ namespace SolasCareWpf.ViewModels
         private readonly SpeedBoosterViewModel _speedBoosterVm;
         private readonly NetworkRepairViewModel _networkRepairVm;
         private readonly SettingsViewModel _settingsVm;
+        private bool _disposed;
 
         [ObservableProperty]
         private ObservableObject _currentViewModel;
@@ -52,6 +57,13 @@ namespace SolasCareWpf.ViewModels
                 "Settings" => _settingsVm,
                 _ => _dashboardVm
             };
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _dashboardVm?.Dispose();
         }
     }
 }
