@@ -1111,8 +1111,20 @@ const ALLOWED_COMMANDS = {
     script: 'service_repair.ps1',
     timeout: 60000,
     confirmationRequired: true,
-    confirmationMessage: 'Service ko repair/restart karega. Continue?',
-    buildArgs: ([name, action]) => ['-Action', action || 'repair', '-ServiceName', name]
+    confirmationMessage: 'Service ko repair/restart/set-startup karega. Continue?',
+    // IMPROVEMENT: forward optional 3rd arg (StartupType) so the existing
+    // service_repair.ps1 -Action set-startup path becomes reachable from UI.
+    buildArgs: ([name, action, startupType]) => {
+      const a = String(action || 'repair').toLowerCase();
+      const args = ['-Action', a, '-ServiceName', name];
+      if (a === 'set-startup') {
+        const allowed = ['Automatic', 'Manual', 'Disabled'];
+        const s = String(startupType || 'Automatic');
+        if (!allowed.includes(s)) throw new Error('Invalid StartupType: ' + s);
+        args.push('-StartupType', s);
+      }
+      return args;
+    }
   },
   'detect-browsers': {
     type: 'script',
@@ -1341,8 +1353,285 @@ const ALLOWED_COMMANDS = {
         mainWindow.webContents.send('care-out', `[HEALTH-CHECK] Generating full HTML Diagnostic Report...\n`);
       }
       await executeAllowedCommand('generate-system-report', [], { bypassConfirmation: true });
-      
+
       return JSON.stringify({ success: true, compiledReport: reportData });
+    }
+  },
+
+  // ============================================================
+  // SMART REPAIR - new repair commands (no duplicates of existing).
+  // ============================================================
+
+  // NEW: Windows Update history (last 50 installations with status/KB/HResult).
+  'windows-update-history': {
+    type: 'script',
+    script: 'windows_update_history.ps1',
+    timeout: 30000
+  },
+
+  // NEW: Boot repair - MBR, boot sector, BCD rebuild (bootrec /fixmbr, /fixboot, /rebuildbcd).
+  'repair-boot': {
+    type: 'script',
+    script: 'repair_boot.ps1',
+    timeout: 300000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will modify the boot sector / MBR / BCD. A reboot will be required. Continue?',
+    buildArgs: ([action]) => {
+      const allowed = ['fixmbr', 'fixboot', 'rebuildbcd', 'scanos', 'repair-all'];
+      const a = String(action || 'repair-all').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid boot repair action: ' + a);
+      return ['-Action', a];
+    }
+  },
+
+  // NEW: DLL re-registration (regsvr32) - common DLLs or specific path.
+  'reregister-dll': {
+    type: 'script',
+    script: 'reregister_dll.ps1',
+    timeout: 120000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will re-register Windows DLLs via regsvr32. Continue?',
+    buildArgs: ([action, dllPath]) => {
+      const a = String(action || 'common').toLowerCase();
+      if (!['reregister', 'common'].includes(a)) throw new Error('Invalid DLL reregister action: ' + a);
+      const args = ['-Action', a];
+      if (a === 'reregister') {
+        if (typeof dllPath !== 'string' || !dllPath) throw new Error('DllPath is required for reregister action');
+        args.push('-DllPath', dllPath);
+      }
+      return args;
+    }
+  },
+
+  // NEW: Reset all power plans to defaults (powercfg -restoredefaultschemes).
+  'reset-power-plans': {
+    type: 'powershell',
+    command: 'powercfg -restoredefaultschemes',
+    timeout: 15000,
+    confirmationRequired: true,
+    confirmationMessage: 'This will reset ALL custom power plans to Windows defaults. Your custom plans will be lost. Continue?'
+  },
+
+  // NEW: User profile repair (icon cache, thumbnail cache, font cache, profile permissions).
+  'repair-user-profile': {
+    type: 'script',
+    script: 'repair_user_profile.ps1',
+    timeout: 600000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will clear caches and reset profile permissions. Windows Explorer will restart. Continue?',
+    buildArgs: ([action]) => {
+      const allowed = ['all', 'icon-cache', 'thumbnail-cache', 'font-cache', 'perms'];
+      const a = String(action || 'all').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid profile repair action: ' + a);
+      return ['-Action', a];
+    }
+  },
+
+  // NEW: Windows Disk Cleanup (cleanmgr) - quick / deep / system presets.
+  'disk-cleanup': {
+    type: 'script',
+    script: 'disk_cleanup.ps1',
+    timeout: 1800000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will run Windows Disk Cleanup (cleanmgr). Quick=5min, Deep=15min, System=30min. Continue?',
+    buildArgs: ([mode]) => {
+      const allowed = ['quick', 'deep', 'system'];
+      const m = String(mode || 'quick').toLowerCase();
+      if (!allowed.includes(m)) throw new Error('Invalid disk cleanup mode: ' + m);
+      return ['-Mode', m];
+    }
+  },
+
+  // NEW: chkdsk /f /r - schedules a full disk repair on next reboot (destructive).
+  'repair-chkdsk-full': {
+    type: 'powershell',
+    timeout: 30000,
+    confirmationRequired: true,
+    confirmationMessage: 'This will schedule chkdsk /f /r on the system drive for next reboot. The scan can take 1-4 hours. Continue?',
+    buildCommand: ([drive]) => {
+      const d = (typeof drive === 'string' && /^[A-Z]$/i.test(drive)) ? drive.toUpperCase() : 'C';
+      // Schedule chkdsk on next boot via fsutil dirty set + chkntfs - actually use the
+      // "echo Y | chkdsk /f" pattern which prompts for reboot-schedule and auto-confirms.
+      return `echo Y | chkdsk ${d}: /f /r /x`;
+    }
+  },
+
+  // NEW: HDD defragmentation (Optimize-Volume -Defrag) for rotational drives.
+  // (TRIM for SSDs already exists as run-trim.)
+  'defrag-drive': {
+    type: 'powershell',
+    timeout: 1800000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will defragment the selected HDD. Do NOT run on SSDs. Can take 1-2 hours. Continue?',
+    buildCommand: ([drive]) => {
+      const d = (typeof drive === 'string' && /^[A-Z]$/i.test(drive)) ? drive.toUpperCase() : 'C';
+      return `Optimize-Volume -DriveLetter ${d} -Defrag -Verbose -ErrorAction Stop`;
+    }
+  },
+
+  // NEW: Parse CBS.log to extract corrupt files SFC could not repair.
+  'parse-cbs-log': {
+    type: 'script',
+    script: 'parse_cbs_log.ps1',
+    timeout: 30000
+  },
+
+  // NEW: Pre-repair health check - disk space, battery, network, pending reboot.
+  'pre-repair-health-check': {
+    type: 'script',
+    script: 'pre_repair_health_check.ps1',
+    timeout: 30000
+  },
+
+  // NEW: SFC verification (read-only) - confirms whether a previous SFC repair worked.
+  'verify-sfc': {
+    type: 'powershell',
+    command: 'sfc /verifyonly',
+    timeout: 900000,
+    streamChannel: 'care-out',
+    confirmationRequired: false,
+    confirmationMessage: 'This will run a read-only SFC verification (no changes). Continue?'
+  },
+
+  // NEW: Re-register ALL Appx packages for all users (extends existing repair-store
+  // which only re-registers the Store package itself).
+  'repair-store-all-apps': {
+    type: 'powershell',
+    command: "Get-AppxPackage -AllUsers | ForEach-Object { Add-AppxPackage -DisableDevelopmentMode -Register \"$($_.InstallLocation)\\AppXManifest.xml\" -ErrorAction SilentlyContinue }",
+    timeout: 300000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will re-register ALL Windows Store apps for all users. May take 5-10 minutes. Continue?'
+  },
+
+  // NEW: WMI repository repair (winmgmt /salvagerepository) - fixes corrupt WMI.
+  'repair-wmi-repository': {
+    type: 'powershell',
+    command: 'winmgmt /salvagerepository',
+    timeout: 120000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will salvage the WMI repository. WMI-dependent services may briefly stop. Continue?'
+  },
+
+  // NEW: Clear all Windows event logs (useful when logs are corrupt).
+  'clear-event-logs': {
+    type: 'powershell',
+    command: "wevtutil el | ForEach-Object { try { wevtutil cl \"$_\" } catch {} }",
+    timeout: 120000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'WARNING: This will clear ALL Windows event logs. Diagnostic history will be lost. Continue?'
+  },
+
+  // NEW: Smart Repair orchestrator - runs a named recipe (sequence of existing commands).
+  // Recipes are defined in the React frontend (SmartRepair.jsx) and dispatched here.
+  'smart-repair-recipe': {
+    type: 'native',
+    handler: async (args) => {
+      const recipeId = args[0];
+      const mainWindow = getMainWindowRef();
+
+      // Recipe definitions - ordered sequences of allow-listed commands.
+      // Each step is [commandKey, args[], optional label].
+      const RECIPES = {
+        'pc-slow': [
+          ['create-restore-point', [], 'Create Restore Point'],
+          ['repair-temp-cleanup', [], 'Clean Temporary Files'],
+          ['junk-scan', [], 'Scan Junk Files'],
+          ['run-trim', [process.env.SystemDrive ? process.env.SystemDrive.charAt(0) : 'C'], 'SSD TRIM Optimization'],
+          ['repair-system-sfc', [], 'System File Checker (SFC)'],
+          ['flush-dns', [], 'Flush DNS Cache']
+        ],
+        'internet-issues': [
+          ['flush-dns', [], 'Flush DNS Cache'],
+          ['repair-winsock', [], 'Reset Winsock'],
+          ['repair-tcpip', [], 'Reset TCP/IP'],
+          ['network-adapter-restart', [], 'Restart Network Adapters'],
+          ['repair-windows-update', [], 'Reset Windows Update Components']
+        ],
+        'blue-screen': [
+          ['analyze-bsod', [], 'Analyze BSOD Minidumps'],
+          ['create-restore-point', [], 'Create Restore Point'],
+          ['repair-system-sfc', [], 'System File Checker (SFC)'],
+          ['repair-system-dism', [], 'DISM Component Store Repair'],
+          ['scan-drivers', [], 'Scan for Problem Drivers']
+        ],
+        'windows-update-stuck': [
+          ['repair-windows-update', [], 'Reset WU Components (SoftwareDistribution, catroot2)'],
+          ['repair-system-dism', [], 'DISM Repair (WU dependency)'],
+          ['repair-system-sfc', [], 'SFC Repair'],
+          ['repair-service', ['wuauserv', 'restart'], 'Restart Windows Update Service']
+        ],
+        'disk-issues': [
+          ['create-restore-point', [], 'Create Restore Point'],
+          ['repair-chkdsk-scan', [], 'chkdsk /scan (Read-Only)'],
+          ['repair-system-sfc', [], 'SFC Repair'],
+          ['analyze-component-store', [], 'Analyze Component Store'],
+          ['cleanup-component-store', [], 'Cleanup Component Store (Reclaim Space)']
+        ],
+        'system-corruption': [
+          ['create-restore-point', [], 'Create Restore Point'],
+          ['repair-system-dism', [], 'DISM /RestoreHealth'],
+          ['repair-system-sfc', [], 'SFC /scannow'],
+          ['parse-cbs-log', [], 'Parse CBS.log for Unrepaired Files'],
+          ['verify-sfc', [], 'SFC /verifyonly (Verification)']
+        ],
+        'freshen-windows': [
+          ['create-restore-point', [], 'Create Restore Point'],
+          ['repair-temp-cleanup', [], 'Temp File Cleanup'],
+          ['disk-cleanup', ['deep'], 'Disk Cleanup (Deep)'],
+          ['repair-icon-cache', [], 'Rebuild Icon Cache'],
+          ['repair-system-sfc', [], 'SFC Repair'],
+          ['flush-dns', [], 'Flush DNS'],
+          ['recycle-bin-cleanup', [], 'Empty Recycle Bin']
+        ]
+      };
+
+      const recipe = RECIPES[recipeId];
+      if (!recipe) {
+        return JSON.stringify({ success: false, error: 'Unknown recipe: ' + recipeId + '. Available: ' + Object.keys(RECIPES).join(', ') });
+      }
+
+      const results = [];
+      for (let i = 0; i < recipe.length; i++) {
+        const [cmdKey, cmdArgs, label] = recipe[i];
+        const pct = Math.round((i / recipe.length) * 100);
+        if (mainWindow) {
+          mainWindow.webContents.send('care-out', `[RECIPE] (${pct}%) Step ${i + 1}/${recipe.length}: ${label}...\n`);
+        }
+        try {
+          const res = await executeAllowedCommand(cmdKey, cmdArgs, { bypassConfirmation: true });
+          results.push({ step: label, command: cmdKey, success: res.success, error: res.error || null, durationSec: res.durationSec || null });
+          if (mainWindow) {
+            if (res.success) {
+              mainWindow.webContents.send('care-out', `[RECIPE] ✓ Step ${i + 1} completed.\n`);
+            } else {
+              mainWindow.webContents.send('care-out', `[RECIPE] ✗ Step ${i + 1} failed: ${res.error || 'Unknown error'}\n`);
+            }
+          }
+        } catch (e) {
+          results.push({ step: label, command: cmdKey, success: false, error: e.message });
+          if (mainWindow) {
+            mainWindow.webContents.send('care-out', `[RECIPE] ✗ Step ${i + 1} threw: ${e.message}\n`);
+          }
+        }
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      return JSON.stringify({
+        success: successCount === results.length,
+        recipe: recipeId,
+        totalSteps: results.length,
+        successCount,
+        failureCount: results.length - successCount,
+        results
+      });
     }
   }
 };

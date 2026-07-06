@@ -64,11 +64,13 @@ export default function ServiceManager() {
   }, [services, debouncedSearch, statusFilter]);
 
   // IMPROVEMENT: per-row acting state so users can queue multiple actions.
-  const actOn = async (name, action) => {
+  // Optional 3rd arg (startupType) is forwarded to the IPC layer for set-startup.
+  const actOn = async (name, action, startupType) => {
     setActingOnServices(prev => new Set([...prev, name]));
     try {
       if (window.api) {
-        const res = await window.api.runSystemCommand('repair-service', [name, action]);
+        const ipcArgs = startupType ? [name, action, startupType] : [name, action];
+        const res = await window.api.runSystemCommand('repair-service', ipcArgs);
         if (res.success) {
           addNotification('Service ' + action, `Successfully ${action}ed service: ${name}`, 'success');
           loadServices();
@@ -244,7 +246,23 @@ export default function ServiceManager() {
                           {svc.Status}
                         </span>
                       </td>
-                      <td className="px-4 py-4 font-semibold text-slate-300">{svc.StartType}</td>
+                      <td className="px-4 py-4">
+                        {/* IMPROVEMENT: inline dropdown to change startup type.
+                            Wires the previously-unreachable -Action set-startup
+                            path in service_repair.ps1 via the updated repair-service
+                            IPC buildArgs (now accepts a 3rd StartupType arg). */}
+                        <select
+                          value={svc.StartType}
+                          disabled={isActing}
+                          onChange={(e) => actOn(svc.Name, 'set-startup', e.target.value)}
+                          className="px-2 py-1 bg-slate-950/60 border border-brand-border rounded text-[11px] font-semibold text-slate-300 cursor-pointer focus:outline-none focus:border-brand-violet disabled:opacity-50"
+                          title="Change startup type"
+                        >
+                          <option value="Automatic">Automatic</option>
+                          <option value="Manual">Manual</option>
+                          <option value="Disabled">Disabled</option>
+                        </select>
+                      </td>
                       <td className="px-4 py-4 text-right">
                         <div className="flex justify-end gap-2">
                           <button

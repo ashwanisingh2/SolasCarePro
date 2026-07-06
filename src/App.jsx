@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, Wrench, MonitorCheck, Cpu, Wifi, CircuitBoard, Package, Globe, 
   Sparkles, Settings2, Database, Info, Activity, History, Bot, LifeBuoy, Zap, Settings,
-  Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw
+  Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope
 } from 'lucide-react';
 
 const OneClickDashboard = React.lazy(() => import('./components/RepairDashboard'));
 const CoreRepair = React.lazy(() => import('./components/OneClickCare'));
+const SmartRepair = React.lazy(() => import('./components/SmartRepair'));
 const WindowsHealth = React.lazy(() => import('./components/WindowsHealth'));
 const DriverManager = React.lazy(() => import('./components/DriverManager'));
 const PowerFeatures = React.lazy(() => import('./components/PowerFeatures'));
@@ -108,6 +109,7 @@ export default function App() {
   // Removed duplicates from sidebar (Network and History & Logs are available inside Power Features subtabs)
   const navigation = [
     { id: 'dashboard',    label: 'Dashboard',          icon: LayoutDashboard,  component: OneClickDashboard },
+    { id: 'smart-repair', label: 'Smart Repair',       icon: Stethoscope,      component: SmartRepair },
     { id: 'core',         label: 'Core Repair',         icon: Wrench,           component: CoreRepair },
     { id: 'windows',      label: 'Windows',             icon: MonitorCheck,     component: WindowsHealth },
     { id: 'driver',       label: 'Drivers',             icon: Cpu,              component: DriverManager },
