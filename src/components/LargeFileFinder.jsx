@@ -3,8 +3,12 @@ import {
   Eye, EyeOff, Search, X, Trash2, FolderOpen, HardDrive, FileText, RefreshCw
 } from 'lucide-react';
 import { formatBytes } from '../utils/formatters';
+import { useConfirm } from './shared/ConfirmModal';
+import { useNotification } from '../context/NotificationContext';
 
 export default function LargeFileFinder() {
+  const confirm = useConfirm();
+  const { addNotification } = useNotification();
   const [largeFiles, setLargeFiles] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -105,7 +109,18 @@ export default function LargeFileFinder() {
 
   const deleteSelected = async () => {
     if (selectedFiles.length === 0) return;
-    if (!confirm(`Delete ${selectedFiles.length} selected files? This cannot be undone.`)) return;
+    // IMPROVEMENT: use the styled ConfirmModal instead of native window.confirm.
+    const totalSize = largeFiles
+      .filter(f => selectedFiles.includes(f.path))
+      .reduce((sum, f) => sum + (f.size || 0), 0);
+    const ok = await confirm({
+      title: 'Delete Selected Files',
+      message: `Permanently delete ${selectedFiles.length} file(s) (${formatBytes(totalSize)})?`,
+      detail: 'This action cannot be undone. Files bypass the Recycle Bin.',
+      confirmLabel: 'Delete',
+      danger: true
+    });
+    if (!ok) return;
 
     setStatusMessage('Deleting files...');
     try {
@@ -115,8 +130,9 @@ export default function LargeFileFinder() {
           setLargeFiles(prev => prev.filter(f => !selectedFiles.includes(f.path)));
           setSelectedFiles([]);
           setStatusMessage('Selected files deleted successfully.');
+          addNotification('Files Deleted', `${selectedFiles.length} file(s) deleted successfully.`, 'success');
         } else {
-          alert('Delete action failed: ' + (res.error || 'Permission Denied'));
+          addNotification('Delete Failed', res.error || 'Permission Denied', 'error');
           setStatusMessage('Deletion failed.');
         }
       } else {
@@ -127,6 +143,7 @@ export default function LargeFileFinder() {
     } catch (e) {
       console.error('Failed to delete:', e);
       setStatusMessage('Deletion error: ' + e.message);
+      addNotification('Delete Error', e.message, 'error');
     }
   };
 

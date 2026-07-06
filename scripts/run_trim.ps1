@@ -1,36 +1,69 @@
 # run_trim.ps1
 param (
+    [ValidatePattern('^[A-Za-z]$')]
     [string]$Drive = "C"
 )
 
+# IMPROVEMENT: dot-source shared helpers (JSON output, timeout, timing).
+. (Join-Path $PSScriptRoot '_common.ps1')
+
 $ErrorActionPreference = 'Stop'
+$timer = Start-Timer
 
 try {
+    Assert-Admin
+
+    $Drive = $Drive.ToUpper()
+    $status = @{ drive = "${Drive}:"; steps = @() }
+
     # 1. Verify and enable TRIM support if disabled
-    Write-Output "[SYSTEM] Checking Windows TRIM status..."
-    $notify = fsutil behavior query DisableDeleteNotify
-    if ($notify -match "= 1") {
-        Write-Output "[SYSTEM] TRIM is disabled. Attempting to enable TRIM support..."
+    $status.steps += 'checking-trim-status'
+    $notify = fsutil behavior query DisableDeleteNotify 2>&1 | Out-String
+    $trimWasEnabled = -not ($notify -match "= 1")
+    if (-not $trimWasEnabled) {
         fsutil behavior set DisableDeleteNotify 0 | Out-Null
-        Write-Output "[SYSTEM] TRIM support successfully enabled in Windows system behavior settings."
+        $status.trimEnabledNow = $true
     } else {
-        Write-Output "[SYSTEM] TRIM support is already enabled."
+        $status.trimEnabledNow = $false
     }
 
-    # 2. Run ReTrim optimization based on OS Version
-    Write-Output "[SYSTEM] Initializing TRIM optimization command on Volume ${Drive}:..."
-    $osVersion = [System.Environment]::OSVersion.Version
-    if ($osVersion.Major -lt 10) {
+    # 2. Run ReTrim optimization based on OS Version.
+    # IMPROVEMENT: hard 10-minute timeout so a hung Optimize-Volume doesn't
+    # block the parent process forever (especially when run via scheduled task).
+    $osMajor = Get-OSMajorVersion
+    $status.osMajor = $osMajor
+
+    if ($osMajor -lt 10) {
         # Windows 7 / 8 SP1: defrag /L command triggers TRIM
-        Write-Output "[SYSTEM] Operating system detected: Windows 7/8. Using legacy defrag TRIM command..."
-        defrag.exe "$($Drive):" /L /V
+        $status.steps += 'trim-legacy-defrag'
+        $r = Invoke-WithTimeout -FilePath 'defrag.exe' -ArgumentList "$($Drive): /L /V" -TimeoutSec 600
+        if ($r.ExitCode -ne 0) {
+            throw "defrag.exe /L exited with code $($r.ExitCode). Stderr: $($r.StdErr)"
+        }
     } else {
-        # Windows 10/11: Optimize-Volume
-        Optimize-Volume -DriveLetter $Drive -ReTrim -Verbose
+        # Windows 10/11: Optimize-Volume -ReTrim
+        $status.steps += 'trim-optimize-volume'
+        $r = Invoke-WithTimeout -FilePath 'powershell.exe' `
+            -ArgumentList "-NoProfile -Command `"Optimize-Volume -DriveLetter $Drive -ReTrim -Verbose -ErrorAction Stop`"" `
+            -TimeoutSec 600
+        if ($r.ExitCode -ne 0) {
+            throw "Optimize-Volume exited with code $($r.ExitCode). StdErr: $($r.StdErr)"
+        }
     }
 
-    Write-Output "[SYSTEM] Volume TRIM optimization completed successfully!"
+    $status.steps += 'completed'
+    Write-JsonResult @{
+        success = $true
+        drive = "${Drive}:"
+        trimWasAlreadyEnabled = $trimWasEnabled
+        steps = $status.steps
+        message = "Volume TRIM optimization completed on ${Drive}:"
+    } (Get-TimerElapsedSec $timer)
 } catch {
-    Write-Output "[ERROR] TRIM command failed. Detailed explanation: $_"
+    Write-JsonResult @{
+        success = $false
+        drive = "${Drive}:"
+        error = $_.Exception.Message
+    } (Get-TimerElapsedSec $timer)
     exit 1
 }

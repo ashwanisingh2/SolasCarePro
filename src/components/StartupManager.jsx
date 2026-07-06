@@ -4,8 +4,10 @@ import {
   Cpu, MemoryStick, MonitorSpeaker,
   ShieldCheck, RefreshCw, ArrowRight, ArrowDown
 } from 'lucide-react';
+import { useNotification } from '../context/NotificationContext';
 
 export default function StartupManager() {
+  const { addNotification } = useNotification();
   const [startupApps, setStartupApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedApp, setExpandedApp] = useState(null);
@@ -79,7 +81,8 @@ export default function StartupManager() {
           setStartupApps(prev =>
             prev.map(app => app.id === id ? { ...app, Enabled: currentEnabled } : app)
           );
-          alert(`Failed to update startup setting: ${res.error || 'Access Denied'}`);
+          // IMPROVEMENT: replace native alert() with in-app toast notification.
+          addNotification('Startup Toggle Failed', `Failed to ${action} "${name}": ${res.error || 'Access Denied'}`, 'error');
         }
       } catch (err) {
         console.error('Toggle startup failed:', err);

@@ -1351,5 +1351,6 @@ module.exports = {
   initCommandExecutor,
   executeAllowedCommand,
   killActiveProcess,
-  getScriptPath
+  getScriptPath,
+  activeChildCount: () => activeChildProcesses.size
 };

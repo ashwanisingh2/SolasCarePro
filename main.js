@@ -3,12 +3,12 @@ if (require('electron-squirrel-startup')) {
   process.exit(0);
 }
 
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, shell, nativeImage, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, shell, nativeImage, Notification, session, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { exec, spawn } = require('child_process');
-const { initCommandExecutor, executeAllowedCommand, killActiveProcess, getScriptPath } = require('./electron/commandExecutor');
+const { initCommandExecutor, executeAllowedCommand, killActiveProcess, getScriptPath, activeChildCount } = require('./electron/commandExecutor');
 
 let mainWindow;
 let tray = null;
@@ -434,15 +434,109 @@ app.on('second-instance', () => {
 // `before-quit` ensures the close handler in createWindow stops intercepting
 // OS shutdown / Alt+F4 / app.quit() once the user actually wants to exit.
 // Without this, minimising to tray once is enough to permanently block logoff.
-app.on('before-quit', () => {
+//
+// IMPROVEMENT: also kill any in-flight child processes (sfc/dism/winget) so
+// they don't keep running detached and potentially corrupt files mid-write.
+app.on('before-quit', (event) => {
   app.isQuitting = true;
   if (tray) {
     try { tray.destroy(); } catch (e) {}
     tray = null;
   }
+  if (activeChildCount() > 0) {
+    event.preventDefault();
+    writeLog('WARN', `Quitting with ${activeChildCount()} active child process(es); cleaning up...`);
+    killActiveProcess();
+    // Wait briefly for the tree-kill to complete before allowing quit.
+    setTimeout(() => {
+      app.exit(0);
+    }, 500);
+  }
 });
 
-app.whenReady().then(createWindow).catch((err) => {
+// IMPROVEMENT: register a global hotkey (Ctrl+Alt+S) to bring the app to front.
+// Useful when the user has minimized to tray during a long scan.
+app.on('ready', () => {
+  try {
+    globalShortcut.register('CommandOrControl+Alt+S', () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      } else {
+        createWindow();
+      }
+    });
+  } catch (e) {
+    writeLog('WARN', 'Failed to register global shortcut: ' + e.message);
+  }
+});
+
+app.on('will-quit', () => {
+  try { globalShortcut.unregisterAll(); } catch (_) {}
+});
+
+// IMPROVEMENT: inject a strict Content-Security-Policy on all responses.
+// The dev-server URL is allowed only in dev mode via the dynamic check below.
+function installCsp() {
+  const isDev = !app.isPackaged;
+  const connectSrc = isDev ? "'self' http://localhost:* ws://localhost:*" : "'self'";
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          `default-src 'self'; ` +
+          `script-src 'self'; ` +
+          `style-src 'self' 'unsafe-inline'; ` +
+          `img-src 'self' data:; ` +
+          `font-src 'self' data:; ` +
+          `connect-src ${connectSrc}; ` +
+          `object-src 'none'; ` +
+          `frame-src 'none'`
+        ]
+      }
+    });
+  });
+}
+
+// IMPROVEMENT: IPC rate-limiting + in-flight de-duplication.
+// A user double-clicking "Run SFC" could otherwise launch two concurrent
+// `sfc /scannow` processes both writing to the same file.
+const buckets = new Map();      // channel -> { tokens, lastRefill }
+const inflight = new Map();     // key -> Promise
+const LIMITS = {
+  'run-system-command': { rps: 4, burst: 8 },
+  'get-system-metrics': { rps: 4, burst: 6 },
+  'set-setting':        { rps: 12, burst: 24 },
+  'get-setting':        { rps: 20, burst: 40 },
+  'is-admin':           { rps: 5, burst: 10 },
+  'get-system-info':    { rps: 5, burst: 10 },
+  'get-dns-status':     { rps: 5, burst: 10 }
+};
+function rateLimit(channel) {
+  const cfg = LIMITS[channel] || { rps: 5, burst: 10 };
+  let b = buckets.get(channel) || { tokens: cfg.burst, last: Date.now() };
+  const now = Date.now();
+  b.tokens = Math.min(cfg.burst, b.tokens + (now - b.last) / 1000 * cfg.rps);
+  b.last = now;
+  buckets.set(channel, b);
+  if (b.tokens < 1) {
+    throw new Error('Rate limit exceeded for ' + channel + '. Please slow down.');
+  }
+  b.tokens -= 1;
+}
+function dedupe(key, fn) {
+  if (inflight.has(key)) return inflight.get(key);
+  const p = fn().finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
+}
+
+app.whenReady().then(() => {
+  installCsp();
+  createWindow();
+}).catch((err) => {
   console.error('Failed to start Solas Care Pro:', err);
   try {
     dialog.showErrorBox('Startup Error', err && err.message ? err.message : String(err));
@@ -489,8 +583,16 @@ ipcMain.handle('check-driver-backup', (event, pnpDeviceId) => {
 
 ipcMain.handle('run-system-command', async (event, commandKey, args = [], options = {}) => {
   try {
+    rateLimit('run-system-command');
+    // De-duplicate in-flight read-only commands so a double-click doesn't
+    // launch two sfc /scannow processes simultaneously. Destructive commands
+    // (those with confirmationRequired) are NOT deduplicated to allow queued
+    // operations - but they do share the rate limit above.
+    const readOnly = !options.bypassConfirmation;
+    const dedupeKey = readOnly ? `cmd:${commandKey}` : null;
+    const exec = () => executeAllowedCommand(commandKey, args, options);
     writeLog('INFO', `Requested allowlisted command: ${commandKey}`);
-    const result = await executeAllowedCommand(commandKey, args, options);
+    const result = dedupeKey ? await dedupe(dedupeKey, exec) : await exec();
     writeAudit(commandKey, { args }, result);
     return result;
   } catch (error) {
@@ -583,6 +685,9 @@ ipcMain.handle('open-file-dialog', async (event, { title, filters } = {}) => {
 let prevCpus = os.cpus();
 let prevNetBytes = 0;
 let prevNetTimestamp = Date.now();
+let lastMetrics = null;          // cached last-computed metrics (for rate-limited calls)
+let metricsCacheTs = 0;          // timestamp of last compute
+const METRICS_CACHE_TTL_MS = 1500; // cache metrics for 1.5s to debounce rapid polls
 
 function getCpuUsagePercent() {
   const currentCpus = os.cpus();
@@ -606,26 +711,35 @@ function getCpuUsagePercent() {
   return Math.round((1 - (idleDiff / totalDiff)) * 1000) / 10;
 }
 
-ipcMain.handle('get-system-metrics', async () => {
+// IMPROVEMENT: computeMetrics is a single async function that returns a
+// cached result if called within the TTL window. This avoids spawning
+// `netstat -e` on every 2s poll when the renderer bursts requests.
+async function computeMetrics() {
+  // Cache hit - return last known values without re-spawning netstat.
+  if (Date.now() - metricsCacheTs < METRICS_CACHE_TTL_MS) {
+    return lastMetrics;
+  }
+
   const cpuPercent = getCpuUsagePercent();
-  
+
   // RAM Usage
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
   const ramPercent = totalMem > 0 ? Math.round(((totalMem - freeMem) / totalMem) * 1000) / 10 : 0;
-  
-  // Disk Usage
-  let diskPercent = 50;
+
+  // Disk Usage - use SystemDrive instead of hardcoded C:
+  let diskPercent = null;
   try {
-    const stats = fs.statfsSync('C:\\');
+    const sysDrive = (process.env.SystemDrive || 'C:\\') + '\\';
+    const stats = fs.statfsSync(sysDrive);
     if (stats.blocks > 0) {
       diskPercent = Math.round(((stats.blocks - stats.bfree) / stats.blocks) * 1000) / 10;
     }
   } catch (e) {
     writeLog('WARN', 'Failed to retrieve native disk metrics: ' + e.message);
   }
-  
-  // Network speed using fast netstat -e command
+
+  // Network speed using fast netstat -e command (only when cache expires)
   return new Promise((resolve) => {
     exec('netstat -e', (err, stdout) => {
       let netSpeed = 0;
@@ -652,15 +766,28 @@ ipcMain.handle('get-system-metrics', async () => {
       }
       prevNetTimestamp = currentTimestamp;
       
-      resolve({
+      const metrics = {
         cpu: cpuPercent,
         ram: ramPercent,
         disk: diskPercent,
         netSpeed: netSpeed,
         lastUpdated: new Date().toLocaleTimeString()
-      });
+      };
+      lastMetrics = metrics;
+      metricsCacheTs = Date.now();
+      resolve(metrics);
     });
   });
+}
+
+ipcMain.handle('get-system-metrics', async () => {
+  try {
+    rateLimit('get-system-metrics');
+  } catch (e) {
+    // Rate limited - return cached/last-known metrics without re-querying.
+    return lastMetrics || { cpu: 0, ram: 0, disk: 0, netSpeed: 0, lastUpdated: 'rate-limited' };
+  }
+  return computeMetrics();
 });
 
 // 6. Background Scheduled Task Monitor and System Notifications

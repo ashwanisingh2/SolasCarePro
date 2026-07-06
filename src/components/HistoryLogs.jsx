@@ -1,11 +1,12 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { 
-  Download, FileText, FolderOpen, Loader2, RefreshCw, 
-  ShieldCheck, Terminal, Clock, CalendarDays, Trash2, 
-  AlertTriangle, CheckCircle2, ChevronRight, X
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import {
+  Download, FileText, FolderOpen, Loader2, RefreshCw,
+  ShieldCheck, Terminal, Clock, CalendarDays, Trash2,
+  AlertTriangle, CheckCircle2, ChevronRight, X, Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDate } from '../utils/formatters';
+import { useDebounced } from '../utils/hooks';
 
 export default function HistoryLogs() {
   const [subView, setSubView] = useState('history'); // 'history' or 'raw'
@@ -15,6 +16,10 @@ export default function HistoryLogs() {
   const [status, setStatus] = useState('Diagnostic logs and repair history ready.');
   const [selectedEntry, setSelectedEntry] = useState(null);
   const rawConsoleEndRef = useRef(null);
+  // IMPROVEMENT: search + result filter + category filter
+  const [search, setSearch] = useState('');
+  const [resultFilter, setResultFilter] = useState('All'); // All | SUCCESS | FAILURE
+  const debouncedSearch = useDebounced(search, 200);
 
   const loadHistory = async () => {
     setLoading(true);
@@ -135,6 +140,43 @@ export default function HistoryLogs() {
     }
   };
 
+  // IMPROVEMENT: export the currently-visible (filtered) history array as JSON.
+  const exportVisibleJson = () => {
+    if (filteredHistory.length === 0) {
+      setStatus('Nothing to export - no matching entries.');
+      return;
+    }
+    try {
+      const blob = new Blob([JSON.stringify(filteredHistory, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `solas_history_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setStatus(`Exported ${filteredHistory.length} entries to JSON.`);
+    } catch (e) {
+      setStatus('Export failed: ' + e.message);
+    }
+  };
+
+  // IMPROVEMENT: memoized filtered+searched history. Previously the entire
+  // list rendered with no filtering/search capability.
+  const filteredHistory = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    return history.filter(h => {
+      if (resultFilter !== 'All' && h.result !== resultFilter) return false;
+      if (!q) return true;
+      return (
+        (h.action || '').toLowerCase().includes(q) ||
+        (h.error || '').toLowerCase().includes(q) ||
+        JSON.stringify(h.details || {}).toLowerCase().includes(q)
+      );
+    });
+  }, [history, debouncedSearch, resultFilter]);
+
 
 
   const getActionLabel = (action) => {
@@ -252,11 +294,54 @@ export default function HistoryLogs() {
               <span className="text-[10px] text-slate-500 font-semibold">{status}</span>
             </div>
 
+            {/* IMPROVEMENT: search + result filter chips + export-visible button */}
+            {history.length > 0 && (
+              <div className="flex flex-wrap gap-3 items-center mb-3">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Search by action, error, or details..."
+                    className="w-full pl-9 pr-3 py-2 bg-slate-950/40 border border-brand-border rounded-lg text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-brand-violet"
+                  />
+                </div>
+                <div className="flex gap-1">
+                  {['All', 'SUCCESS', 'FAILURE'].map(r => (
+                    <button
+                      key={r}
+                      onClick={() => setResultFilter(r)}
+                      className={`px-3 py-1.5 text-[10px] font-bold rounded cursor-pointer border transition-colors ${
+                        resultFilter === r
+                          ? 'bg-brand-violet/20 border-brand-violet text-brand-violet'
+                          : 'bg-slate-800/40 border-brand-border text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={exportVisibleJson}
+                  className="px-3 py-1.5 text-[10px] font-bold rounded cursor-pointer border border-brand-border bg-slate-800/40 text-slate-300 hover:bg-slate-700 flex items-center gap-1"
+                  title="Export the currently filtered entries as JSON"
+                >
+                  <Download className="h-3 w-3" /> Export Visible
+                </button>
+              </div>
+            )}
+
             <div className="max-h-[460px] overflow-y-auto space-y-3 pr-1">
               {history.length === 0 ? (
                 <div className="py-12 text-center text-xs font-semibold text-slate-500">No logs found in registry database.</div>
+              ) : filteredHistory.length === 0 ? (
+                <div className="py-12 text-center">
+                  <p className="text-xs font-semibold text-slate-500">No entries match the current filter.</p>
+                  <button onClick={() => { setSearch(''); setResultFilter('All'); }} className="mt-2 text-xs text-brand-violet cursor-pointer">Clear filters</button>
+                </div>
               ) : (
-                history.map((item, index) => (
+                filteredHistory.map((item, index) => (
                   <motion.div
                     key={item.id || index}
                     initial={{ opacity: 0, y: 10 }}

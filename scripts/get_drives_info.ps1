@@ -1,11 +1,45 @@
 # get_drives_info.ps1
+# IMPROVEMENT: opt-in switch to run real fragmentation analysis via `defrag /A`.
+# Default is fast scan (no frag %). Pass -IncludeFragAnalysis for real numbers.
+param(
+    [switch]$IncludeFragAnalysis
+)
+
+# IMPROVEMENT: dot-source shared helpers (JSON output, timeout, OS version).
+. (Join-Path $PSScriptRoot '_common.ps1')
+
 $ErrorActionPreference = 'Stop'
 
 $results = @()
-$osVersion = [System.Environment]::OSVersion.Version
+
+function Get-DriveFragmentation {
+    param([string]$DriveLetter)
+    # Run `defrag <drive>: /A` (analysis only, no changes) with a 2-minute timeout.
+    # SSDs on Win10+ report "Solid state drives don't need defragmentation" -
+    # we return null for those (let the UI render "N/A").
+    $tmp = [System.IO.Path]::GetTempFileName()
+    try {
+        $r = Invoke-WithTimeout -FilePath 'defrag.exe' `
+            -ArgumentList "$($DriveLetter): /A /V" -TimeoutSec 120
+        if ($r.ExitCode -ne 0 -and $r.ExitCode -ne 1) {
+            # Exit code 1 = "drive doesn't need defrag" (SSD or already clean)
+            return $null
+        }
+        $out = $r.StdOut
+        if ($out -match '(?i)do not need|solid state') { return $null }
+        $fragPct = $null
+        if ($out -match '(?i)fragmentation\s*[:\s]*([\d\.]+)\s*%') { $fragPct = [double]$Matches[1] }
+        return $fragPct
+    } catch {
+        return $null
+    } finally {
+        Remove-Item $tmp -ErrorAction SilentlyContinue
+    }
+}
 
 try {
-    if ($osVersion.Major -ge 10) {
+    $osMajor = Get-OSMajorVersion
+    if ($osMajor -ge 10) {
         $volumes = Get-Volume -ErrorAction Stop | Where-Object { $_.DriveLetter }
         foreach ($vol in $volumes) {
             $letter = $vol.DriveLetter.ToString()
@@ -18,16 +52,18 @@ try {
                     if ($phys) { $mediaType = $phys.MediaType.ToString() }
                 } catch {}
             }
-            # Fix: do not fabricate random fragmentation %. Real fragmentation
-            # requires `defrag /A` which can take minutes per drive. Leave as
-            # null and let the UI render "N/A" instead of fake numbers.
+            $fragBefore = $null
+            if ($IncludeFragAnalysis -and $mediaType -ne 'SSD') {
+                $fragBefore = Get-DriveFragmentation $letter
+            }
             $results += [PSCustomObject]@{
                 DriveLetter = $letter
                 MediaType = $mediaType
                 Size = $vol.Size
                 FreeSpace = $vol.SizeRemaining
-                FragBefore = $null
+                FragBefore = $fragBefore
                 FragAfter = $null
+                FragAnalyzed = $IncludeFragAnalysis.IsPresent
             }
         }
     } else {
@@ -35,29 +71,24 @@ try {
         $disks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop
         foreach ($d in $disks) {
             $letter = $d.DeviceID.Replace(":", "")
-            # Fix: do not assume C is SSD - we don't know without querying Win32_DiskDrive.
-            # Leave MediaType as "Unknown" so UI can render it accordingly.
+            $fragBefore = $null
+            if ($IncludeFragAnalysis) {
+                $fragBefore = Get-DriveFragmentation $letter
+            }
             $results += [PSCustomObject]@{
                 DriveLetter = $letter
                 MediaType = "Unknown"
                 Size = $d.Size
                 FreeSpace = $d.FreeSpace
-                FragBefore = $null
+                FragBefore = $fragBefore
                 FragAfter = $null
+                FragAnalyzed = $IncludeFragAnalysis.IsPresent
             }
         }
     }
 } catch {
-    # Fix: do not fabricate a fake C: drive on error. Surface the error as JSON.
-    Write-Output ('{"error":"' + ($_.Exception.Message -replace '[\\"]',' ') + '"}')
+    Write-JsonError $_.Exception.Message 'get_drives_info'
     exit 0
 }
 
-# Fix: empty array on PS 5.1 emits nothing via ConvertTo-Json. Force array shape.
-if ($results.Count -eq 0) {
-    Write-Output "[]"
-} elseif ($results.Count -eq 1) {
-    Write-Output "[$($results | ConvertTo-Json -Compress)]"
-} else {
-    Write-Output ($results | ConvertTo-Json -Compress)
-}
+Write-Output (ConvertTo-JsonArray $results)

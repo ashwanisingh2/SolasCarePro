@@ -234,7 +234,8 @@ function OneClickCare() {
           setEnablingRestore(false);
           runRestoreStage();
         } else {
-          alert('Failed to enable: ' + res.stdout);
+          // IMPROVEMENT: surface failure via in-app toast instead of native alert().
+          setRestoreError('Failed to enable System Protection: ' + (res.stdout || res.error || 'Unknown error'));
           setEnablingRestore(false);
         }
       } else {
@@ -243,7 +244,7 @@ function OneClickCare() {
         runRestoreStage();
       }
     } catch(e) {
-      alert(e.message);
+      setRestoreError('Failed to enable System Protection: ' + e.message);
       setEnablingRestore(false);
     }
   };

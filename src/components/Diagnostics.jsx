@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { 
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer 
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { 
-  Activity, AlertOctagon, BatteryCharging, HardDrive, ShieldCheck, 
+import {
+  Activity, AlertOctagon, BatteryCharging, HardDrive, ShieldCheck,
   ShieldAlert, RefreshCw, ChevronDown, ChevronUp, Thermometer, Battery,
   Search, XCircle, Terminal, HelpCircle
 } from 'lucide-react';
+import { useNotification } from '../context/NotificationContext';
 
 export default function Diagnostics() {
+  const { addNotification } = useNotification();
   const [activeSubTab, setActiveSubTab] = useState('bsod'); // bsod, battery, disk
   const [loading, setLoading] = useState(false);
   const [expandedBsod, setExpandedBsod] = useState(null);
@@ -137,7 +139,8 @@ export default function Diagnostics() {
     if (reportPath && window.api && window.api.openLatestBsodReport) {
       await window.api.openLatestBsodReport();
     } else {
-      alert("Mock Full Report opened in browser!");
+      // IMPROVEMENT: in-app toast instead of native alert() for mock-mode message.
+      addNotification('Full Report', 'No BSOD report available yet. Run a BSOD scan first to generate one.', 'info');
     }
   };
 
