@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  LayoutDashboard, Wrench, MonitorCheck, Cpu, Wifi, CircuitBoard, Package, Globe, 
-  Sparkles, Settings2, Database, Info, Activity, History, Bot, LifeBuoy, Zap, Settings,
-  Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope, Brain, FileText,
-  Gauge, Thermometer, HardDriveDownload
+  LayoutDashboard, Wrench, MonitorCheck, Cpu, CircuitBoard, Package, Globe, 
+  Sparkles, Settings2, Database, Info, Activity, Bot, LifeBuoy, Zap, Settings,
+  Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope, Brain, FileText
 } from 'lucide-react';
 
 const OneClickDashboard = React.lazy(() => import('./components/RepairDashboard'));
