@@ -51,7 +51,8 @@
       "scripts/**/*"
     ],
     "win": {
-      "target": "portable",
+      "icon": "icon.png",
+      "target": ["portable", "zip", "nsis"],
       "requestedExecutionLevel": "requireAdministrator"
     }
   }

@@ -91,8 +91,10 @@ export default function App() {
 
   // Deep linking and routing mapper
   const handleSetActiveTab = (tabId) => {
-    if (tabId === 'fix' || tabId === 'care') {
-      setActiveTab('fix');
+    if (['fix', 'care', 'autopilot', 'quickfix', 'core'].includes(tabId)) {
+      setActiveTab('smart-repair');
+    } else if (['diagnostics', 'windows', 'hardware-info'].includes(tabId)) {
+      setActiveTab('ai-diagnostics');
     } else if (tabId === 'drivers' || tabId === 'driver') {
       setActiveTab('driver');
     } else if (tabId === 'power') {
@@ -109,13 +111,11 @@ export default function App() {
     }
   };
 
-  // Removed duplicates from sidebar (Network and History & Logs are available inside Power Features subtabs)
+  // Removed duplicates from sidebar to keep the tool clean and professional
   const navigation = [
     { id: 'dashboard',    label: 'Dashboard',          icon: LayoutDashboard,  component: OneClickDashboard },
     { id: 'ai-diagnostics', label: 'AI Diagnostics',   icon: Brain,            component: AIDiagnostics },
     { id: 'smart-repair', label: 'Smart Repair',       icon: Stethoscope,      component: SmartRepair },
-    { id: 'core',         label: 'Core Repair',         icon: Wrench,           component: CoreRepair },
-    { id: 'windows',      label: 'Windows',             icon: MonitorCheck,     component: WindowsHealth },
     { id: 'driver',       label: 'Drivers',             icon: Cpu,              component: DriverManager },
     { id: 'power',        label: 'Power Features',      icon: Zap,              component: PowerFeatures },
     { id: 'hardware',     label: 'Hardware',            icon: CircuitBoard,     component: HardwareDiagnostics },
@@ -124,12 +124,7 @@ export default function App() {
     { id: 'maintenance',  label: 'Maintenance',         icon: Sparkles,         component: MaintenanceHub },
     { id: 'services',     label: 'Services',            icon: Settings2,        component: ServiceManager },
     { id: 'registry',     label: 'Registry',            icon: Database,         component: RegistryManager },
-    { id: 'hardware-info',label: 'Hardware Info',       icon: Info,             component: HardwareInfo },
-    { id: 'diagnostics',  label: 'Diagnostics',         icon: Activity,         component: Diagnostics },
     { id: 'report-center',label: 'Report Center',       icon: FileText,         component: ReportCenter },
-    { id: 'autopilot',    label: 'Auto-Pilot',          icon: Bot,              component: AutoPilot },
-    { id: 'fix',          label: 'Fix My Problem',      icon: LifeBuoy,         component: FixMyProblem },
-    { id: 'quickfix',     label: 'Quick Fix',           icon: Zap,              component: QuickFix },
     { id: 'settings',     label: 'Settings',            icon: Settings,         component: SettingsView },
   ];
 
