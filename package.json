@@ -1,6 +1,6 @@
 {
-  "name": "solas-system-care-pro",
-  "version": "3.1.0",
+  "name": "solas-pc-master",
+  "version": "4.2.1",
   "description": "Professional-grade Advanced System Repair & Driver Management Suite",
   "main": "main.js",
   "scripts": {
@@ -33,8 +33,8 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.solas.systemcarepro",
-    "productName": "SolasSystemCarePro",
+    "appId": "com.solas.pcmaster",
+    "productName": "SolasPCMaster",
     "directories": {
       "output": "dist-electron"
     },

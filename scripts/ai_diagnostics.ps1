@@ -14,73 +14,7 @@ $ErrorActionPreference = 'Stop'
 $timer = Start-Timer
 
 # ─── Expert System Rules ───
-# Each rule: condition (scriptblock) -> diagnosis + recommendation + severity
-$diagnosticRules = @(
-    @{
-        id = 'high-ram-usage'
-        check = { $metrics.ramUsedPercent -gt 85 }
-        diagnosis = "Critical RAM usage detected ($($metrics.ramUsedPercent)%). The system is running low on physical memory, causing excessive paging to disk which slows down all operations."
-        recommendation = "Close memory-hungry applications, disable unnecessary startup programs, or install more RAM. Run 'Maintenance Hub > Junk Cleanup' to free resources. Consider running the 'PC Slow' repair recipe."
-        severity = 'critical'
-        category = 'Performance'
-    },
-    @{
-        id = 'low-disk-space'
-        check = { $metrics.diskFreePercent -lt 10 }
-        diagnosis = "Critical disk space shortage on C: drive ($($metrics.diskFreePercent)% free). Low disk space can cause system instability, failed updates, and performance degradation."
-        recommendation = "Run 'Disk Cleanup (Deep mode)' immediately. Empty the Recycle Bin. Uninstall unused applications. Move large files to another drive. Target: at least 15% free space."
-        severity = 'critical'
-        category = 'Storage'
-    },
-    @{
-        id = 'pending-updates'
-        check = { $metrics.pendingUpdates -gt 15 }
-        diagnosis = "$($metrics.pendingUpdates) Windows Updates are pending installation. Outdated system files may contain security vulnerabilities and bug fixes that affect stability."
-        recommendation = "Run the 'Windows Update Stuck' repair recipe, then install pending updates via the Software tab. Reboot after installation."
-        severity = 'warning'
-        category = 'Security'
-    },
-    @{
-        id = 'bad-drivers'
-        check = { $metrics.badDrivers -gt 3 }
-        diagnosis = "$($metrics.badDrivers) device driver(s) are reporting errors. Faulty drivers are the #1 cause of Blue Screen of Death (BSOD) crashes and hardware malfunctions."
-        recommendation = "Open the Drivers tab and scan for problem devices. Use 'Update' on devices with Error/Missing status. If a recent driver update caused issues, use 'Rollback'. Run 'Driver Verifier' for deep BSOD diagnosis."
-        severity = 'warning'
-        category = 'Drivers'
-    },
-    @{
-        id = 'error-events'
-        check = { $metrics.errorEvents -gt 50 }
-        diagnosis = "High error activity in the last 24 hours ($($metrics.errorEvents) events). This indicates recurring system issues that may escalate to crashes or data loss."
-        recommendation = "Open the Error Log Analyzer to identify the top error sources. If BSOD events are present, run the 'Blue Screen' repair recipe. Check the Diagnostics tab for crash analysis."
-        severity = 'warning'
-        category = 'Stability'
-    },
-    @{
-        id = 'failing-disks'
-        check = { $metrics.failingDisks -gt 0 }
-        diagnosis = "CRITICAL: $($metrics.failingDisks) disk(s) are reporting SMART health warnings. This is an early warning of imminent disk failure. Data loss is likely if not addressed."
-        recommendation = "BACK UP YOUR DATA IMMEDIATELY. Replace the failing disk. Run 'chkdsk /f /r' to attempt bad sector recovery. Do NOT ignore this warning."
-        severity = 'critical'
-        category = 'Storage'
-    },
-    @{
-        id = 'moderate-ram'
-        check = { $metrics.ramUsedPercent -gt 70 -and $metrics.ramUsedPercent -le 85 }
-        diagnosis = "Moderate RAM usage ($($metrics.ramUsedPercent)%). The system has adequate memory but is under load. Performance may degrade during heavy multitasking."
-        recommendation = "Consider closing unused applications. Check the Startup Manager for programs that auto-launch and consume memory. Performance Mode 'Work' profile can help optimize resource allocation."
-        severity = 'info'
-        category = 'Performance'
-    },
-    @{
-        id = 'pending-reboot'
-        check = { $metrics.pendingReboot }
-        diagnosis = "A system reboot is pending. Some recently installed updates or configuration changes have not been applied yet. SFC and DISM results may be inaccurate until reboot."
-        recommendation = "Reboot your computer at the earliest convenience to complete pending changes and ensure accurate diagnostic results."
-        severity = 'info'
-        category = 'System'
-    }
-)
+
 
 # ─── Predictive failure rules (based on trends) ───
 $predictiveRules = @(
@@ -145,6 +79,74 @@ function Get-SystemMetrics {
 try {
     $metrics = Get-SystemMetrics
 
+    # Each rule: condition (scriptblock) -> diagnosis + recommendation + severity
+    $diagnosticRules = @(
+        [PSCustomObject]@{
+            id = 'high-ram-usage'
+            check = { $metrics.ramUsedPercent -gt 85 }
+            diagnosis = "Critical RAM usage detected ($($metrics.ramUsedPercent)%). The system is running low on physical memory, causing excessive paging to disk which slows down all operations."
+            recommendation = "Close memory-hungry applications, disable unnecessary startup programs, or install more RAM. Run 'Maintenance Hub > Junk Cleanup' to free resources. Consider running the 'PC Slow' repair recipe."
+            severity = 'critical'
+            category = 'Performance'
+        },
+        [PSCustomObject]@{
+            id = 'low-disk-space'
+            check = { $metrics.diskFreePercent -lt 10 }
+            diagnosis = "Critical disk space shortage on C: drive ($($metrics.diskFreePercent)% free). Low disk space can cause system instability, failed updates, and performance degradation."
+            recommendation = "Run 'Disk Cleanup (Deep mode)' immediately. Empty the Recycle Bin. Uninstall unused applications. Move large files to another drive. Target: at least 15% free space."
+            severity = 'critical'
+            category = 'Storage'
+        },
+        [PSCustomObject]@{
+            id = 'pending-updates'
+            check = { $metrics.pendingUpdates -gt 15 }
+            diagnosis = "$($metrics.pendingUpdates) Windows Updates are pending installation. Outdated system files may contain security vulnerabilities and bug fixes that affect stability."
+            recommendation = "Run the 'Windows Update Stuck' repair recipe, then install pending updates via the Software tab. Reboot after installation."
+            severity = 'warning'
+            category = 'Security'
+        },
+        [PSCustomObject]@{
+            id = 'bad-drivers'
+            check = { $metrics.badDrivers -gt 3 }
+            diagnosis = "$($metrics.badDrivers) device driver(s) are reporting errors. Faulty drivers are the #1 cause of Blue Screen of Death (BSOD) crashes and hardware malfunctions."
+            recommendation = "Open the Drivers tab and scan for problem devices. Use 'Update' on devices with Error/Missing status. If a recent driver update caused issues, use 'Rollback'. Run 'Driver Verifier' for deep BSOD diagnosis."
+            severity = 'warning'
+            category = 'Drivers'
+        },
+        [PSCustomObject]@{
+            id = 'error-events'
+            check = { $metrics.errorEvents -gt 50 }
+            diagnosis = "High error activity in the last 24 hours ($($metrics.errorEvents) events). This indicates recurring system issues that may escalate to crashes or data loss."
+            recommendation = "Open the Error Log Analyzer to identify the top error sources. If BSOD events are present, run the 'Blue Screen' repair recipe. Check the Diagnostics tab for crash analysis."
+            severity = 'warning'
+            category = 'Stability'
+        },
+        [PSCustomObject]@{
+            id = 'failing-disks'
+            check = { $metrics.failingDisks -gt 0 }
+            diagnosis = "CRITICAL: $($metrics.failingDisks) disk(s) are reporting SMART health warnings. This is an early warning of imminent disk failure. Data loss is likely if not addressed."
+            recommendation = "BACK UP YOUR DATA IMMEDIATELY. Replace the failing disk. Run 'chkdsk /f /r' to attempt bad sector recovery. Do NOT ignore this warning."
+            severity = 'critical'
+            category = 'Storage'
+        },
+        [PSCustomObject]@{
+            id = 'moderate-ram'
+            check = { $metrics.ramUsedPercent -gt 70 -and $metrics.ramUsedPercent -le 85 }
+            diagnosis = "Moderate RAM usage ($($metrics.ramUsedPercent)%). The system has adequate memory but is under load. Performance may degrade during heavy multitasking."
+            recommendation = "Consider closing unused applications. Check the Startup Manager for programs that auto-launch and consume memory. Performance Mode 'Work' profile can help optimize resource allocation."
+            severity = 'info'
+            category = 'Performance'
+        },
+        [PSCustomObject]@{
+            id = 'pending-reboot'
+            check = { $metrics.pendingReboot }
+            diagnosis = "A system reboot is pending. Some recently installed updates or configuration changes have not been applied yet. SFC and DISM results may be inaccurate until reboot."
+            recommendation = "Reboot your computer at the earliest convenience to complete pending changes and ensure accurate diagnostic results."
+            severity = 'info'
+            category = 'System'
+        }
+    )
+
     switch ($Action) {
         'diagnose' {
             # Run all diagnostic rules and return findings
@@ -164,8 +166,8 @@ try {
                 } catch {}
             }
 
-            $criticalCount = ($findings | Where-Object { $_.severity -eq 'critical' }).Count
-            $warningCount = ($findings | Where-Object { $_.severity -eq 'warning' }).Count
+            $criticalCount = @($findings | Where-Object { $_.severity -eq 'critical' }).Count
+            $warningCount = @($findings | Where-Object { $_.severity -eq 'warning' }).Count
 
             $overall = if ($criticalCount -gt 0) { 'Critical issues detected' }
                        elseif ($warningCount -gt 0) { 'Warnings detected' }
@@ -351,7 +353,7 @@ try {
 
             # Prioritize: critical first, then by category
             $priorityOrder = @{ 'critical' = 0; 'warning' = 1; 'info' = 2 }
-            $sortedFindings = $findings | Sort-Object { $priorityOrder[$_.severity] }
+            $sortedFindings = @($findings) | Sort-Object { $priorityOrder[$_.severity] }
             $topIssue = $sortedFindings[0]
 
             # Map to repair recipe

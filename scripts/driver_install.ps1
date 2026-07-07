@@ -11,6 +11,11 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Output '{"success":false,"error":"This operation requires Administrator privileges."}'
+    exit 1
+}
+
 # Dot-source shared helpers (audit log, restore point, JSON helpers)
 . (Join-Path $PSScriptRoot '_common.ps1')
 
@@ -162,30 +167,18 @@ switch ($Action) {
 
     'list-store' {
         Write-Output "[LIST] Enumerating driver store..."
-        $out = & pnputil.exe /enum-drivers 2>&1
-        $exitCode = $LASTEXITCODE
-        # Parse the pnputil output into structured entries
+        $drivers = Get-WindowsDriver -Online -ErrorAction SilentlyContinue
         $entries = @()
-        $current = $null
-        foreach ($line in $out) {
-            if ($line -match '^\s*Published Name\s*:\s*(.+)\s*$') {
-                if ($current) { $entries += $current }
-                $current = [PSCustomObject]@{ PublishedName = $matches[1].Trim() }
-            } elseif ($line -match '^\s*Original Name\s*:\s*(.+)\s*$' -and $current) {
-                $current | Add-Member -NotePropertyName OriginalName -NotePropertyValue $matches[1].Trim()
-            } elseif ($line -match '^\s*Provider Name\s*:\s*(.+)\s*$' -and $current) {
-                $current | Add-Member -NotePropertyName Provider -NotePropertyValue $matches[1].Trim()
-            } elseif ($line -match '^\s*Class Name\s*:\s*(.+)\s*$' -and $current) {
-                $current | Add-Member -NotePropertyName ClassName -NotePropertyValue $matches[1].Trim()
-            } elseif ($line -match '^\s*Class GUID\s*:\s*(.+)\s*$' -and $current) {
-                $current | Add-Member -NotePropertyName ClassGuid -NotePropertyValue $matches[1].Trim()
-            } elseif ($line -match '^\s*Driver Version\s*:\s*(.+)\s*$' -and $current) {
-                $current | Add-Member -NotePropertyName Version -NotePropertyValue $matches[1].Trim()
-            } elseif ($line -match '^\s*Signer Name\s*:\s*(.+)\s*$' -and $current) {
-                $current | Add-Member -NotePropertyName Signer -NotePropertyValue $matches[1].Trim()
+        foreach ($d in $drivers) {
+            $entries += [PSCustomObject]@{
+                PublishedName = $d.Driver
+                OriginalName = $d.OriginalFileName
+                Provider = $d.ProviderName
+                ClassName = $d.ClassName
+                Version = $d.Version
+                Date = $d.Date
             }
         }
-        if ($current) { $entries += $current }
         $result = [PSCustomObject]@{
             success  = $true
             count    = $entries.Count

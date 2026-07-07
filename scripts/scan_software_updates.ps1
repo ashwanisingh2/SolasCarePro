@@ -11,7 +11,7 @@ try {
     # Fix: add --accept-package-agreements and --disable-interactivity so winget
     # does not block on an interactive prompt when stdout is redirected.
     # Add a 60-second timeout so a hung winget doesn't block the UI forever.
-    $process = Start-Process winget -ArgumentList "upgrade --accept-source-agreements --accept-package-agreements --disable-interactivity" -NoNewWindow -PassThru -RedirectStandardOutput $tempFile -RedirectStandardError "$tempFile.err"
+    $process = Start-Process winget -ArgumentList "upgrade --accept-source-agreements --disable-interactivity" -NoNewWindow -PassThru -RedirectStandardOutput $tempFile -RedirectStandardError "$tempFile.err"
     if (-not $process.WaitForExit(60000)) {
         try { $process.Kill() } catch {}
         Write-Output "[]"

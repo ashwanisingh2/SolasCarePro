@@ -100,16 +100,17 @@ $healthPercent = if ($designCapacity -gt 0) {
 $capacityHistory = @()
 
 $report = @{
-    BatteryPresent      = $true
-    ParsedSuccessfully  = $parsedSuccessfully
-    DesignCapacity      = $designCapacity
-    FullChargeCapacity  = $fullChargeCapacity
-    HealthPercent       = $healthPercent
-    CycleCount          = $cycleCount
-    Chemistry           = $chemistry
-    ChargePercent       = $chargePercent
-    IsCharging          = $isCharging
-    History             = $capacityHistory
+    isDesktop           = -not $true # Set false for now since BatteryPresent = $true in script
+    parsedSuccessfully  = $parsedSuccessfully
+    designCapacity      = $designCapacity
+    fullChargeCapacity  = $fullChargeCapacity
+    health              = if ($healthPercent -eq 0) { "Unknown" } elseif ($healthPercent -ge 80) { "Good" } elseif ($healthPercent -ge 50) { "Fair" } else { "Poor" }
+    healthPercent       = $healthPercent
+    cycleCount          = $cycleCount
+    chemistry           = $chemistry
+    chargePercent       = if ($chargePercent -eq $null) { 0 } else { $chargePercent }
+    status              = if ($isCharging) { "Charging" } else { "Discharging" }
+    history             = $capacityHistory
 }
 
 Write-Output ($report | ConvertTo-Json -Compress)

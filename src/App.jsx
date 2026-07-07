@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, Wrench, MonitorCheck, Cpu, CircuitBoard, Package, Globe, 
   Sparkles, Settings2, Database, Info, Activity, Bot, LifeBuoy, Zap, Settings,
-  Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope, Brain, FileText
+  Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope, Brain, FileText,
+  Trash2, Lock, Unlock, Copy, FileWarning, Search, Trash, FileX, Scissors, XSquare
 } from 'lucide-react';
 
 const OneClickDashboard = React.lazy(() => import('./components/RepairDashboard'));
@@ -16,9 +17,22 @@ const MaintenanceHub = React.lazy(() => import('./components/MaintenanceHub'));
 const ServiceManager = React.lazy(() => import('./components/ServiceManager'));
 const RegistryManager = React.lazy(() => import('./components/RegistryManager'));
 const SettingsView = React.lazy(() => import('./components/Settings'));
-// NEW: Phase 5 components
 const AIDiagnostics = React.lazy(() => import('./components/AIDiagnostics'));
 const ReportCenter = React.lazy(() => import('./components/ReportCenter'));
+const NetworkMonitor = React.lazy(() => import('./components/NetworkMonitor'));
+const PrivacyCleaner = React.lazy(() => import('./components/PrivacyCleaner'));
+const StartupManager = React.lazy(() => import('./components/StartupManager'));
+const LargeFileFinder = React.lazy(() => import('./components/LargeFileFinder'));
+const HistoryLogs = React.lazy(() => import('./components/HistoryLogs'));
+
+// NEW: Advanced Tools
+const ForceUninstaller = React.lazy(() => import('./components/ForceUninstaller'));
+const FileShredder = React.lazy(() => import('./components/FileShredder'));
+const FileUnlocker = React.lazy(() => import('./components/FileUnlocker'));
+const DriverSweeper = React.lazy(() => import('./components/DriverSweeper'));
+const DuplicateFinder = React.lazy(() => import('./components/DuplicateFinder'));
+const BrokenShortcuts = React.lazy(() => import('./components/BrokenShortcuts'));
+const HostsEditor = React.lazy(() => import('./components/HostsEditor'));
 
 
 export default function App() {
@@ -102,19 +116,37 @@ export default function App() {
 
   // Removed duplicates from sidebar to keep the tool clean and professional
   const navigation = [
+    { isHeader: true, label: 'Core Tools' },
     { id: 'dashboard',    label: 'Dashboard',          icon: LayoutDashboard,  component: OneClickDashboard },
     { id: 'ai-diagnostics', label: 'Smart Diagnostics',   icon: Brain,            component: AIDiagnostics },
     { id: 'smart-repair', label: 'Smart Repair',       icon: Stethoscope,      component: SmartRepair },
+    { isHeader: true, label: '🛠️ Utilities' },
     { id: 'driver',       label: 'Drivers',             icon: Cpu,              component: DriverManager },
     { id: 'power',        label: 'Power Features',      icon: Zap,              component: PowerFeatures },
     { id: 'hardware',     label: 'Hardware',            icon: CircuitBoard,     component: HardwareDiagnostics },
     { id: 'software',     label: 'Software',            icon: Package,          component: SoftwareUpdater },
-    { id: 'browser',      label: 'Browser Repair',      icon: Globe,            component: BrowserRepair },
     { id: 'maintenance',  label: 'Maintenance',         icon: Sparkles,         component: MaintenanceHub },
+    { id: 'startup',      label: 'Startup',             icon: Zap,              component: StartupManager },
+    { id: 'large-files',  label: 'Large Files',         icon: Database,         component: LargeFileFinder },
+    { id: 'history',      label: 'History Logs',        icon: FileText,         component: HistoryLogs },
+    { id: 'report-center',label: 'Report Center',       icon: FileText,         component: ReportCenter },
+    { isHeader: true, label: '🌐 Network Tools' },
+    { id: 'network',      label: 'Network Monitor',     icon: Globe,            component: NetworkMonitor },
+    { id: 'browser',      label: 'Browser Repair',      icon: Globe,            component: BrowserRepair },
+    { isHeader: true, label: '🔒 Security Tools' },
     { id: 'services',     label: 'Services',            icon: Settings2,        component: ServiceManager },
     { id: 'registry',     label: 'Registry',            icon: Database,         component: RegistryManager },
-    { id: 'report-center',label: 'Report Center',       icon: FileText,         component: ReportCenter },
+    { id: 'privacy',      label: 'Privacy Cleaner',     icon: ShieldCheck,      component: PrivacyCleaner },
+    { isHeader: true, label: '⚙️ System' },
     { id: 'settings',     label: 'Settings',            icon: Settings,         component: SettingsView },
+    { isHeader: true, label: '🔥 Advanced Tools' },
+    { id: 'force-uninstaller', label: 'Force Uninstaller', icon: Trash2,         component: ForceUninstaller },
+    { id: 'file-shredder',     label: 'File Shredder',     icon: Scissors,       component: FileShredder },
+    { id: 'file-unlocker',     label: 'File Unlocker',     icon: Unlock,         component: FileUnlocker },
+    { id: 'driver-sweeper',    label: 'Driver Sweeper',    icon: Trash,          component: DriverSweeper },
+    { id: 'duplicate-finder',  label: 'Duplicate Finder',  icon: Copy,           component: DuplicateFinder },
+    { id: 'broken-shortcuts',  label: 'Broken Shortcuts',  icon: FileX,          component: BrokenShortcuts },
+    { id: 'hosts-editor',      label: 'Hosts Ad-Blocker',  icon: ShieldAlert,    component: HostsEditor },
   ];
 
   const getBreadcrumb = () => {
@@ -140,15 +172,25 @@ export default function App() {
             <Zap className="h-8 w-8 text-brand-violet animate-pulse shrink-0" />
             <div className="hidden md:block">
               <h1 className="text-lg font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-brand-violet to-brand-cyan">
-                SOLAS PRO
+                SOLAS MASTER
               </h1>
               <p className="text-[10px] text-slate-400 font-medium">Windows Repair Center</p>
             </div>
+            <span className="bg-brand-violet text-white px-2 py-0.5 rounded text-[10px] font-black">
+              v4.2.0
+            </span>
           </div>
 
           {/* Navigation Items */}
           <nav className="space-y-1">
-            {navigation.map((item) => {
+            {navigation.map((item, index) => {
+              if (item.isHeader) {
+                return (
+                  <div key={`header-${index}`} className="px-4 py-2 mt-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden md:block">
+                    {item.label}
+                  </div>
+                );
+              }
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
@@ -156,7 +198,7 @@ export default function App() {
                   key={item.id}
                   onClick={() => handleSetActiveTab(item.id)}
                   title={item.label}
-                  className={`w-full flex items-center justify-center md:justify-start gap-3 px-3 md:px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
+                  className={`w-full flex items-center justify-center md:justify-start gap-3 px-3 md:px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
                     isActive 
                       ? 'bg-gradient-to-r from-brand-violet/20 to-brand-cyan/10 border-l-4 border-brand-violet text-white shadow-md' 
                       : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -194,7 +236,7 @@ export default function App() {
               </p>
             </div>
           </div>
-          <p className="hidden md:block text-[10px] text-slate-500 text-center mt-3 font-medium">Solas Care Pro v3.0.0</p>
+          <p className="hidden md:block text-[10px] text-slate-500 text-center mt-3 font-medium">Solas PC Master v4.2.0</p>
         </div>
       </aside>
 

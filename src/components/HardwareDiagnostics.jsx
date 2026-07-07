@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Activity, ClipboardList, Clock, RefreshCw, Loader2, Play, AlertOctagon,
-  Cpu, HardDrive, Battery, Monitor, Zap, AlertTriangle, CheckCircle2, XCircle
+  Cpu, HardDrive, Battery, Monitor, Zap, AlertTriangle, CheckCircle2, XCircle, Settings, MonitorPlay
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNotification } from '../context/NotificationContext';
@@ -10,8 +10,10 @@ import { formatDate } from '../utils/formatters';
 const TABS = [
   { id: 'ram',     label: 'RAM',     icon: Activity },
   { id: 'cpu',     label: 'CPU',     icon: Cpu },
+  { id: 'gpu',     label: 'GPU',     icon: MonitorPlay },
   { id: 'disk',    label: 'Disk',    icon: HardDrive },
   { id: 'battery', label: 'Battery', icon: Battery },
+  { id: 'bios',    label: 'Motherboard', icon: Settings },
 ];
 
 export default function HardwareDiagnostics() {
@@ -55,8 +57,10 @@ export default function HardwareDiagnostics() {
         >
           {activeTab === 'ram'     && <RamTab />}
           {activeTab === 'cpu'     && <CpuTab />}
+          {activeTab === 'gpu'     && <GpuTab />}
           {activeTab === 'disk'    && <DiskTab />}
           {activeTab === 'battery' && <BatteryTab />}
+          {activeTab === 'bios'    && <BiosTab />}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -78,7 +82,7 @@ function RamTab() {
       if (window.api) {
         const res = await window.api.runSystemCommand('get-ram-diagnostic-result');
         if (res.success && res.stdout) {
-          setRamResult(JSON.parse(res.stdout.trim()));
+          const match = res.stdout.match(/\{[\s\S]*\}/); if (match) setRamResult(JSON.parse(match[0]));
         } else {
           setRamResult({ hasResult: false, result: 'No results found', testDate: 'N/A' });
         }
@@ -573,6 +577,132 @@ function BatteryField({ label, value, good }) {
     <div className="bg-slate-950/40 border border-brand-border rounded-lg p-3">
       <div className="text-[10px] text-slate-500 uppercase font-bold">{label}</div>
       <div className={`text-xs font-bold mt-0.5 ${good === undefined ? 'text-slate-200' : good ? 'text-emerald-400' : 'text-amber-400'}`}>{value}</div>
+    </div>
+  );
+}
+
+// =====================================================================
+// Tab 5: GPU
+// =====================================================================
+function GpuTab() {
+  const [gpus, setGpus] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchGpu = async () => {
+      try {
+        if (window.api) {
+          const res = await window.api.runSystemCommand('run-hardware-advanced', ['gpu']);
+          if (res.success && res.stdout) {
+            const m = res.stdout.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+            if (m) {
+              let parsed = JSON.parse(m[0]);
+              setGpus(Array.isArray(parsed) ? parsed : [parsed]);
+            }
+          }
+        } else {
+          setGpus([{ Name: 'NVIDIA GeForce RTX 3060', DriverVersion: '31.0.15.3623', AdapterRAM: 12884901888, Status: 'OK' }]);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGpu();
+  }, []);
+
+  if (loading) return <div className="py-16 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-brand-violet" /></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="glass-panel border border-brand-border rounded-xl p-6">
+        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2 border-b border-brand-border pb-2 mb-4">
+          <MonitorPlay className="h-5 w-5 text-brand-violet" />
+          Graphics Processing Units (GPU)
+        </h3>
+        {gpus && gpus.length > 0 ? (
+          <div className="space-y-4">
+            {gpus.map((g, i) => (
+              <div key={i} className="p-4 bg-slate-950/30 rounded-lg border border-slate-900 grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-xs text-slate-500 block">Model</span>
+                  <span className="text-sm font-bold text-slate-200">{g.Name || 'Unknown'}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500 block">Driver Version</span>
+                  <span className="text-sm font-bold text-slate-200">{g.DriverVersion || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500 block">VRAM (Dedicated)</span>
+                  <span className="text-sm font-bold text-slate-200">
+                    {g.AdapterRAM ? `${Math.round(g.AdapterRAM / 1024 / 1024 / 1024)} GB` : 'N/A'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-500 block">Status</span>
+                  <span className="text-sm font-bold text-emerald-400">{g.Status || 'OK'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <p className="text-xs text-slate-500">No GPUs detected.</p>}
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// Tab 6: BIOS / Motherboard
+// =====================================================================
+function BiosTab() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchBios = async () => {
+      try {
+        if (window.api) {
+          const res = await window.api.runSystemCommand('run-hardware-advanced', ['bios']);
+          if (res.success && res.stdout) {
+            const m = res.stdout.match(/\{[\s\S]*\}/);
+            if (m) setData(JSON.parse(m[0]));
+          }
+        } else {
+          setData({
+            bios: { Manufacturer: 'American Megatrends Inc.', Version: 'F12', ReleaseDate: '2023-11-20' },
+            board: { Manufacturer: 'Gigabyte Technology Co., Ltd.', Product: 'B550 AORUS PRO' }
+          });
+        }
+      } catch (e) {} finally { setLoading(false); }
+    };
+    fetchBios();
+  }, []);
+
+  if (loading) return <div className="py-16 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-brand-violet" /></div>;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="glass-panel border border-brand-border rounded-xl p-6 space-y-4">
+        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2 border-b border-brand-border pb-2">
+          <Settings className="h-5 w-5 text-brand-violet" />
+          Motherboard Info
+        </h3>
+        <div className="space-y-3">
+          <div><span className="text-xs text-slate-500 block">Manufacturer</span><span className="text-sm font-bold text-slate-200">{data?.board?.Manufacturer || 'N/A'}</span></div>
+          <div><span className="text-xs text-slate-500 block">Product Model</span><span className="text-sm font-bold text-slate-200">{data?.board?.Product || 'N/A'}</span></div>
+        </div>
+      </div>
+      <div className="glass-panel border border-brand-border rounded-xl p-6 space-y-4">
+        <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2 border-b border-brand-border pb-2">
+          <Cpu className="h-5 w-5 text-brand-violet" />
+          BIOS / UEFI Firmware
+        </h3>
+        <div className="space-y-3">
+          <div><span className="text-xs text-slate-500 block">BIOS Vendor</span><span className="text-sm font-bold text-slate-200">{data?.bios?.Manufacturer || 'N/A'}</span></div>
+          <div><span className="text-xs text-slate-500 block">Firmware Version</span><span className="text-sm font-bold text-slate-200">{data?.bios?.Version || 'N/A'}</span></div>
+        </div>
+      </div>
     </div>
   );
 }

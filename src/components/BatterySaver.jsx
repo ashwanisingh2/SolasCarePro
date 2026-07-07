@@ -18,16 +18,19 @@ export default function BatterySaver() {
       if (window.api) {
         const res = await window.api.runSystemCommand('battery-report');
         if (res.success && res.stdout) {
-          setBatteryInfo(JSON.parse(res.stdout.trim()));
+          const match = res.stdout.match(/\{[\s\S]*\}/);
+          if (match) {
+            setBatteryInfo(JSON.parse(match[0]));
+          }
         }
       } else {
         // Mock
         setBatteryInfo({
-          ChargePercent: 72,
-          IsCharging: false,
-          HealthPercent: 93,
-          FullChargeCapacity: 52400,
-          DesignCapacity: 56000
+          chargePercent: 72,
+          isCharging: false,
+          healthPercent: 93,
+          fullChargeCapacity: 52400,
+          designCapacity: 56000
         });
       }
     } catch (e) {
@@ -62,15 +65,15 @@ export default function BatterySaver() {
 
   const getBatteryIcon = () => {
     if (!batteryInfo) return <Battery className="h-8 w-8 text-slate-400" />;
-    if (batteryInfo.IsCharging) return <BatteryCharging className="h-8 w-8 text-emerald-400" />;
-    if (batteryInfo.ChargePercent < 20) return <BatteryWarning className="h-8 w-8 text-rose-400" />;
+    if (batteryInfo.isCharging) return <BatteryCharging className="h-8 w-8 text-emerald-400" />;
+    if (batteryInfo.chargePercent < 20) return <BatteryWarning className="h-8 w-8 text-rose-400" />;
     return <Battery className="h-8 w-8 text-brand-cyan" />;
   };
 
   const getBatteryColor = () => {
     if (!batteryInfo) return 'text-slate-400';
-    if (batteryInfo.ChargePercent < 20) return 'text-rose-400';
-    if (batteryInfo.ChargePercent < 50) return 'text-amber-400';
+    if (batteryInfo.chargePercent < 20) return 'text-rose-400';
+    if (batteryInfo.chargePercent < 50) return 'text-amber-400';
     return 'text-emerald-400';
   };
 
@@ -98,10 +101,10 @@ export default function BatterySaver() {
             {getBatteryIcon()}
             <div>
               <h3 className="text-md font-bold text-slate-200">
-                {batteryInfo ? `${batteryInfo.ChargePercent}%` : 'N/A'}
+                {batteryInfo ? `${batteryInfo.chargePercent}%` : 'N/A'}
               </h3>
               <p className="text-xs text-slate-400">
-                {batteryInfo?.IsCharging ? 'Charging' : 'On Battery Power'}
+                {batteryInfo?.isCharging ? 'Charging' : 'On Battery Power'}
               </p>
             </div>
           </div>
@@ -123,16 +126,16 @@ export default function BatterySaver() {
         <div className="space-y-2">
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Battery Health</span>
-            <span className={getBatteryColor()}>{batteryInfo?.HealthPercent}%</span>
+            <span className={getBatteryColor()}>{batteryInfo?.healthPercent}%</span>
           </div>
           <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
-                batteryInfo?.HealthPercent < 80 ? 'bg-rose-500' :
-                batteryInfo?.HealthPercent < 90 ? 'bg-amber-500' :
+                batteryInfo?.healthPercent < 80 ? 'bg-rose-500' :
+                batteryInfo?.healthPercent < 90 ? 'bg-amber-500' :
                 'bg-emerald-500'
               }`}
-              style={{ width: `${batteryInfo?.HealthPercent || 0}%` }}
+              style={{ width: `${batteryInfo?.healthPercent || 0}%` }}
             />
           </div>
         </div>
@@ -141,11 +144,11 @@ export default function BatterySaver() {
         <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-brand-border">
           <div className="text-xs">
             <span className="text-slate-500 block">Design Capacity</span>
-            <span className="text-slate-300 font-semibold">{batteryInfo?.DesignCapacity} mWh</span>
+            <span className="text-slate-300 font-semibold">{batteryInfo?.designCapacity} mWh</span>
           </div>
           <div className="text-xs">
             <span className="text-slate-500 block">Full Charge</span>
-            <span className="text-slate-300 font-semibold">{batteryInfo?.FullChargeCapacity} mWh</span>
+            <span className="text-slate-300 font-semibold">{batteryInfo?.fullChargeCapacity} mWh</span>
           </div>
         </div>
       </div>

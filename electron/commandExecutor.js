@@ -27,7 +27,7 @@ function validateTempBackupDir(backupDir) {
   }
   const resolved = path.resolve(backupDir);
   const tempRoot = path.resolve(process.env.TEMP || 'C:\\Windows\\Temp');
-  if (!resolved.startsWith(tempRoot + path.sep) || !path.basename(resolved).startsWith('SolasCareBackup_')) {
+  if (!resolved.toLowerCase().startsWith((tempRoot + path.sep).toLowerCase()) || !path.basename(resolved).startsWith('SolasCareBackup_')) {
     throw new Error('Backup directory is outside the allowed temp backup area.');
   }
   return resolved;
@@ -132,7 +132,8 @@ function runChildProcess(executable, args, options = {}) {
         success: code === 0,
         stdout: stdoutData,
         stderr: stderrData,
-        exitCode: code
+        exitCode: code,
+        error: code !== 0 ? (stderrData.trim() || `Process exited with code ${code}`) : undefined
       });
     });
   });
@@ -192,8 +193,10 @@ async function executeAllowedCommand(commandKey, rawArgs, options = {}) {
   const scriptArgs = cmd.buildArgs ? cmd.buildArgs(args) : [];
   const scriptPath = getScriptPath(cmd.script);
   
-  // Wrap script run in a command block that configures output encoding to UTF8
-  const scriptCall = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; & '${scriptPath}' ${scriptArgs.map(arg => `'${String(arg).replace(/'/g, "''")}'`).join(' ')}`;
+  const scriptCall = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; & '${scriptPath}' ${scriptArgs.map(arg => {
+    const s = String(arg);
+    return /^(?:-[\w]+|\$true|\$false|\d+)$/i.test(s) ? s : `'${s.replace(/'/g, "''")}'`;
+  }).join(' ')}`;
   
   const result = await runChildProcess(getPowershellPath(), [
     '-NoProfile',
@@ -207,12 +210,9 @@ async function executeAllowedCommand(commandKey, rawArgs, options = {}) {
   // files that were created as input manifests. Best-effort, never throws.
   if (cmd.cleanupTempFiles) {
     try {
-      const tempDir = process.env.TEMP || 'C:\\Windows\\Temp';
-      const entries = fs.readdirSync(tempDir);
-      for (const entry of entries) {
-        if (/^solas_junk_.*\.json$/.test(entry)) {
-          try { fs.unlinkSync(path.join(tempDir, entry)); } catch (_) {}
-        }
+      const tempFiles = scriptArgs.filter(arg => typeof arg === 'string' && /solas_junk_.*\.json$/.test(arg));
+      for (const file of tempFiles) {
+        try { fs.unlinkSync(file); } catch (_) {}
       }
     } catch (_) {}
   }
@@ -243,7 +243,7 @@ const ALLOWED_COMMANDS = {
       if (!['update', 'enable', 'disable', 'restore', 'rollback'].includes(String(action).toLowerCase())) {
         throw new Error('Invalid driver action.');
       }
-      return ['-PnpDeviceId', pnpDeviceId, '-Action', action, '-SafeMode', safeMode ? 'True' : 'False'];
+      return ['-PnpDeviceId', pnpDeviceId, '-Action', action, '-SafeMode', safeMode ? '$true' : '$false'];
     }
   },
   'scan-software-updates': {
@@ -443,7 +443,7 @@ const ALLOWED_COMMANDS = {
   },
   'repair-temp-cleanup': {
     type: 'powershell',
-    command: 'Remove-Item "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item "$env:SystemRoot\\Temp\\*" -Recurse -Force -ErrorAction SilentlyContinue',
+    command: 'Remove-Item "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item "$env:SystemRoot\\Temp\\*" -Recurse -Force -ErrorAction SilentlyContinue; exit 0',
     timeout: 120000,
     streamChannel: 'care-out',
     confirmationRequired: true,
@@ -499,7 +499,7 @@ const ALLOWED_COMMANDS = {
   },
   'repair-registry-permissions': {
     type: 'powershell',
-    command: 'secedit /configure /cfg "$env:windir\\inf\\defltbase.inf" /db defltbase.sdb /verbose',
+    command: 'secedit /configure /cfg "$env:windir\\inf\\defltbase.inf" /db "$env:TEMP\\defltbase.sdb" /verbose',
     timeout: 600000,
     streamChannel: 'care-out',
     confirmationRequired: true,
@@ -550,7 +550,7 @@ const ALLOWED_COMMANDS = {
   },
   'export-event-logs': {
     type: 'powershell',
-    command: 'wevtutil epl System "$env:TEMP\\solas_system.evtx"; wevtutil epl Application "$env:TEMP\\solas_application.evtx"; Write-Output "Exported logs to $env:TEMP"',
+    command: 'wevtutil epl System "$env:TEMP\\solas_system.evtx" /ow:true; wevtutil epl Application "$env:TEMP\\solas_application.evtx" /ow:true; Write-Output "Exported logs to $env:TEMP"',
     timeout: 120000,
     streamChannel: 'care-out'
   },
@@ -668,9 +668,10 @@ const ALLOWED_COMMANDS = {
       const files = JSON.parse(filesJson);
       if (!Array.isArray(files)) throw new Error('Invalid files list.');
       // Reject paths under system directories to prevent accidental system damage.
+      const sysDrive = process.env.SystemDrive || 'C:';
       const FORBIDDEN_PREFIXES = [
-        'C:\\Windows\\', 'C:\\Program Files\\', 'C:\\Program Files (x86)\\',
-        'C:\\ProgramData\\', 'C:\\System Volume Information\\', 'C:\\$Recycle.Bin\\'
+        sysDrive + '\\Windows\\', sysDrive + '\\Program Files\\', sysDrive + '\\Program Files (x86)\\',
+        sysDrive + '\\ProgramData\\', sysDrive + '\\System Volume Information\\', sysDrive + '\\$Recycle.Bin\\'
       ];
       const deletes = files.map(f => {
         if (typeof f !== 'string' || !f) throw new Error('Invalid file path.');
@@ -962,6 +963,74 @@ const ALLOWED_COMMANDS = {
           ['repair-system-sfc', [], 'SFC Repair'],
           ['flush-dns', [], 'Flush DNS'],
           ['recycle-bin-cleanup', [], 'Empty Recycle Bin']
+        ],
+        'audio-sound-issues': [
+          ['repair-service', ['Audiosrv', 'restart'], 'Restart Windows Audio Service'],
+          ['repair-service', ['AudioEndpointBuilder', 'restart'], 'Restart Audio Endpoint Builder'],
+          ['repair-system-sfc', [], 'SFC Repair']
+        ],
+        'printer-issues': [
+          ['repair-service', ['Spooler', 'restart'], 'Restart Print Spooler Service'],
+          ['repair-temp-cleanup', [], 'Clear Temporary Files']
+        ],
+        'explorer-crashing': [
+          ['repair-icon-cache', [], 'Rebuild Icon Cache & Restart Explorer'],
+          ['repair-temp-cleanup', [], 'Temp File Cleanup'],
+          ['repair-system-sfc', [], 'System File Checker (SFC)'],
+          ['repair-system-dism', [], 'DISM Repair']
+        ],
+        'store-apps-crashing': [
+          ['repair-windows-update', [], 'Reset Windows Update Services'],
+          ['repair-system-sfc', [], 'SFC Repair'],
+          ['repair-service', ['wlidsvc', 'restart'], 'Restart MS Account Sign-in']
+        ],
+        'bluetooth-issues': [
+          ['repair-service', ['bthserv', 'restart'], 'Restart Bluetooth Service'],
+          ['scan-drivers', [], 'Scan for Faulty BT Drivers'],
+          ['repair-system-sfc', [], 'System File Checker']
+        ],
+        'high-cpu-usage': [
+          ['repair-temp-cleanup', [], 'Clear Temp Files'],
+          ['repair-service', ['SysMain', 'restart'], 'Restart SysMain (SuperFetch)'],
+          ['repair-service', ['DiagTrack', 'disabled'], 'Disable Telemetry'],
+          ['repair-system-sfc', [], 'Check Corrupt System Processes']
+        ],
+        'game-stuttering': [
+          ['repair-temp-cleanup', [], 'Clear Shader/Temp Caches'],
+          ['flush-dns', [], 'Flush DNS for Latency'],
+          ['repair-service', ['SysMain', 'disabled'], 'Temporarily Disable SysMain'],
+          ['run-trim', ['C'], 'Optimize Game Drive (TRIM)']
+        ],
+        'wifi-disconnecting': [
+          ['network-adapter-restart', [], 'Power-cycle Wi-Fi Adapter'],
+          ['repair-winsock', [], 'Winsock Reset'],
+          ['repair-tcpip', [], 'TCP/IP Reset'],
+          ['flush-dns', [], 'Clear DNS Cache']
+        ],
+        'black-screen': [
+          ['repair-icon-cache', [], 'Restart Windows Explorer'],
+          ['repair-system-sfc', [], 'SFC Repair'],
+          ['repair-system-dism', [], 'DISM Component Repair']
+        ],
+        'microphone-issues': [
+          ['repair-service', ['Audiosrv', 'restart'], 'Restart Audio Service'],
+          ['repair-service', ['AudioEndpointBuilder', 'restart'], 'Restart Audio Endpoint Builder'],
+          ['scan-drivers', [], 'Check Audio Drivers']
+        ],
+        'camera-issues': [
+          ['repair-service', ['FrameServer', 'restart'], 'Restart Windows Camera Frame Server'],
+          ['scan-drivers', [], 'Scan Imaging Drivers']
+        ],
+        'battery-drain': [
+          ['repair-temp-cleanup', [], 'Kill Rogue Temp Processes'],
+          ['repair-windows-update', [], 'Reset Update Loop (Common Drain)'],
+          ['repair-service', ['DiagTrack', 'disabled'], 'Stop Background Telemetry']
+        ],
+        'slow-startup': [
+          ['repair-chkdsk-scan', [], 'Check Disk Health'],
+          ['repair-system-sfc', [], 'Verify Boot Files'],
+          ['repair-temp-cleanup', [], 'Clear Startup Temp Bloat'],
+          ['run-trim', ['C'], 'TRIM Boot Drive']
         ]
       };
 
@@ -1406,6 +1475,13 @@ const ALLOWED_COMMANDS = {
     }
   },
 
+  'run-hardware-advanced': {
+    type: 'script',
+    script: 'hardware_advanced.ps1',
+    timeout: 30000,
+    buildArgs: ([action]) => ['-Action', action]
+  },
+
   // ============================================================
   // NETWORK MONITOR MODULE (PROMPT 3)
   // ============================================================
@@ -1431,6 +1507,27 @@ const ALLOWED_COMMANDS = {
     type: 'script',
     script: 'network_adapters.ps1',
     timeout: 30000
+  },
+
+  // ============================================================
+  // ADVANCED TOOLS MODULE
+  // ============================================================
+  'run-advanced-tool': {
+    type: 'script',
+    script: 'advanced_tools.ps1',
+    timeout: 120000,
+    buildArgs: ([action, target]) => {
+      const args = ['-Action', action];
+      if (target) args.push('-Target', target);
+      return args;
+    }
+  },
+
+  'run-power-tweak': {
+    type: 'script',
+    script: 'power_tweaks.ps1',
+    timeout: 60000,
+    buildArgs: ([action]) => ['-Action', action]
   }
 };
 

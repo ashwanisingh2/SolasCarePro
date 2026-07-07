@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet('list', 'repair', 'restart', 'set-startup')]
+    [ValidateSet('list', 'repair', 'restart', 'set-startup', 'disabled')]
     [string]$Action,
 
     [Parameter(Mandatory=$false)]
@@ -167,5 +167,26 @@ elseif ($Action -eq 'set-startup') {
         Write-JsonResult $result (Get-TimerElapsedSec $timer)
     } catch {
         Write-JsonResult @{ success = $false; message = $_.Exception.Message } (Get-TimerElapsedSec $timer)
+    }
+}
+
+elseif ($Action -eq 'disabled') {
+    try {
+        if (-not $ServiceName) { throw "ServiceName parameter is required." }
+        $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        if (-not $svc) { throw "Service '$ServiceName' does not exist." }
+
+        if ($svc.Status -eq 'Running') {
+            Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+        }
+        Set-Service -Name $ServiceName -StartupType Disabled -ErrorAction Stop
+
+        $result = @{
+            success = $true
+            message = "Service '$ServiceName' was successfully stopped and disabled."
+        }
+        Write-JsonResult $result (Get-TimerElapsedSec $timer)
+    } catch {
+        Write-JsonError $_.Exception.Message 'disabled'
     }
 }

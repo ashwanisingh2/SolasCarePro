@@ -13,6 +13,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Output '{"success":false,"error":"This operation requires Administrator privileges."}'
+    exit 1
+}
+
 $backupDir = Join-Path $env:APPDATA "SolasCare\RegBackups"
 if (-not (Test-Path $backupDir)) {
     New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
@@ -97,7 +102,7 @@ elseif ($Action -eq 'restore') {
         # Security validation: Must reside inside the backup directory
         $resolvedRestore = [System.IO.Path]::GetFullPath($RestoreFile)
         $resolvedBackupDir = [System.IO.Path]::GetFullPath($backupDir)
-        if (-not $resolvedRestore.StartsWith($resolvedBackupDir)) {
+        if (-not $resolvedRestore.ToLower().StartsWith($resolvedBackupDir.ToLower())) {
             throw "Security violation: Restore path is outside the allowed backup folder."
         }
         if (-not (Test-Path $resolvedRestore)) {
