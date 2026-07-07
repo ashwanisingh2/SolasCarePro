@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Wrench, MonitorCheck, Cpu, CircuitBoard, Package, Globe, 
   Sparkles, Settings2, Database, Info, Activity, Bot, LifeBuoy, Zap, Settings,
   Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope, Brain, FileText,
-  Trash2, Lock, Unlock, Copy, FileWarning, Search, Trash, FileX, Scissors, XSquare
+  Trash2, Scissors, Copy, FileX, Unlock
 } from 'lucide-react';
 
 const OneClickDashboard = React.lazy(() => import('./components/RepairDashboard'));
@@ -19,13 +19,8 @@ const RegistryManager = React.lazy(() => import('./components/RegistryManager'))
 const SettingsView = React.lazy(() => import('./components/Settings'));
 const AIDiagnostics = React.lazy(() => import('./components/AIDiagnostics'));
 const ReportCenter = React.lazy(() => import('./components/ReportCenter'));
-const NetworkMonitor = React.lazy(() => import('./components/NetworkMonitor'));
-const PrivacyCleaner = React.lazy(() => import('./components/PrivacyCleaner'));
-const StartupManager = React.lazy(() => import('./components/StartupManager'));
-const LargeFileFinder = React.lazy(() => import('./components/LargeFileFinder'));
-const HistoryLogs = React.lazy(() => import('./components/HistoryLogs'));
 
-// NEW: Advanced Tools
+// Advanced Tools (PROMPT batch)
 const ForceUninstaller = React.lazy(() => import('./components/ForceUninstaller'));
 const FileShredder = React.lazy(() => import('./components/FileShredder'));
 const FileUnlocker = React.lazy(() => import('./components/FileUnlocker'));
@@ -103,10 +98,11 @@ export default function App() {
     } else if (tabId === 'power') {
       setActiveTab('power');
       setPowerSubTab('performance');
-    } else if ([
-      'performance', 'network', 'startup', 'battery', 
-      'privacy', 'largefiles', 'history'
-    ].includes(tabId)) {
+    } else if (['performance', 'battery', 'ultimate', 'coreparking', 'faststartup',
+                'advancedtweaks', 'network', 'privacy', 'startup', 'largefiles', 'history'
+               ].includes(tabId)) {
+      // Power Features hosts these as subtabs; clicking them opens Power Features
+      // with the requested sub-tab active.
       setActiveTab('power');
       setPowerSubTab(tabId);
     } else {
@@ -117,33 +113,28 @@ export default function App() {
   // Removed duplicates from sidebar to keep the tool clean and professional
   const navigation = [
     { isHeader: true, label: 'Core Tools' },
-    { id: 'dashboard',    label: 'Dashboard',          icon: LayoutDashboard,  component: OneClickDashboard },
-    { id: 'ai-diagnostics', label: 'Smart Diagnostics',   icon: Brain,            component: AIDiagnostics },
-    { id: 'smart-repair', label: 'Smart Repair',       icon: Stethoscope,      component: SmartRepair },
-    { isHeader: true, label: '🛠️ Utilities' },
-    { id: 'driver',       label: 'Drivers',             icon: Cpu,              component: DriverManager },
-    { id: 'power',        label: 'Power Features',      icon: Zap,              component: PowerFeatures },
-    { id: 'hardware',     label: 'Hardware',            icon: CircuitBoard,     component: HardwareDiagnostics },
-    { id: 'software',     label: 'Software',            icon: Package,          component: SoftwareUpdater },
-    { id: 'maintenance',  label: 'Maintenance',         icon: Sparkles,         component: MaintenanceHub },
-    { id: 'startup',      label: 'Startup',             icon: Zap,              component: StartupManager },
-    { id: 'large-files',  label: 'Large Files',         icon: Database,         component: LargeFileFinder },
-    { id: 'history',      label: 'History Logs',        icon: FileText,         component: HistoryLogs },
-    { id: 'report-center',label: 'Report Center',       icon: FileText,         component: ReportCenter },
-    { isHeader: true, label: '🌐 Network Tools' },
-    { id: 'network',      label: 'Network Monitor',     icon: Globe,            component: NetworkMonitor },
-    { id: 'browser',      label: 'Browser Repair',      icon: Globe,            component: BrowserRepair },
-    { isHeader: true, label: '🔒 Security Tools' },
-    { id: 'services',     label: 'Services',            icon: Settings2,        component: ServiceManager },
-    { id: 'registry',     label: 'Registry',            icon: Database,         component: RegistryManager },
-    { id: 'privacy',      label: 'Privacy Cleaner',     icon: ShieldCheck,      component: PrivacyCleaner },
-    { isHeader: true, label: '⚙️ System' },
-    { id: 'settings',     label: 'Settings',            icon: Settings,         component: SettingsView },
-    { isHeader: true, label: '🔥 Advanced Tools' },
+    { id: 'dashboard',      label: 'Dashboard',          icon: LayoutDashboard,  component: OneClickDashboard },
+    { id: 'ai-diagnostics', label: 'Smart Diagnostics', icon: Brain,            component: AIDiagnostics },
+    { id: 'smart-repair',   label: 'Smart Repair',       icon: Stethoscope,      component: SmartRepair },
+    { isHeader: true, label: 'Utilities' },
+    { id: 'driver',         label: 'Drivers',            icon: Cpu,              component: DriverManager },
+    { id: 'power',          label: 'Power Features',     icon: Zap,              component: PowerFeatures },
+    { id: 'hardware',       label: 'Hardware',           icon: CircuitBoard,     component: HardwareDiagnostics },
+    { id: 'software',       label: 'Software',           icon: Package,          component: SoftwareUpdater },
+    { id: 'maintenance',    label: 'Maintenance',        icon: Sparkles,         component: MaintenanceHub },
+    { id: 'report-center',  label: 'Report Center',      icon: FileText,         component: ReportCenter },
+    { isHeader: true, label: 'Network Tools' },
+    { id: 'browser',        label: 'Browser Repair',     icon: Globe,            component: BrowserRepair },
+    { isHeader: true, label: 'Security Tools' },
+    { id: 'services',       label: 'Services',           icon: Settings2,        component: ServiceManager },
+    { id: 'registry',       label: 'Registry',           icon: Database,         component: RegistryManager },
+    { isHeader: true, label: 'System' },
+    { id: 'settings',       label: 'Settings',           icon: Settings,         component: SettingsView },
+    { isHeader: true, label: 'Advanced Tools' },
     { id: 'force-uninstaller', label: 'Force Uninstaller', icon: Trash2,         component: ForceUninstaller },
     { id: 'file-shredder',     label: 'File Shredder',     icon: Scissors,       component: FileShredder },
     { id: 'file-unlocker',     label: 'File Unlocker',     icon: Unlock,         component: FileUnlocker },
-    { id: 'driver-sweeper',    label: 'Driver Sweeper',    icon: Trash,          component: DriverSweeper },
+    { id: 'driver-sweeper',    label: 'Driver Sweeper',    icon: Trash2,         component: DriverSweeper },
     { id: 'duplicate-finder',  label: 'Duplicate Finder',  icon: Copy,           component: DuplicateFinder },
     { id: 'broken-shortcuts',  label: 'Broken Shortcuts',  icon: FileX,          component: BrokenShortcuts },
     { id: 'hosts-editor',      label: 'Hosts Ad-Blocker',  icon: ShieldAlert,    component: HostsEditor },
@@ -172,12 +163,12 @@ export default function App() {
             <Zap className="h-8 w-8 text-brand-violet animate-pulse shrink-0" />
             <div className="hidden md:block">
               <h1 className="text-lg font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-brand-violet to-brand-cyan">
-                SOLAS MASTER
+                SOLAS CARE PRO
               </h1>
               <p className="text-[10px] text-slate-400 font-medium">Windows Repair Center</p>
             </div>
             <span className="bg-brand-violet text-white px-2 py-0.5 rounded text-[10px] font-black">
-              v4.2.0
+              v4.2.2
             </span>
           </div>
 
@@ -236,7 +227,7 @@ export default function App() {
               </p>
             </div>
           </div>
-          <p className="hidden md:block text-[10px] text-slate-500 text-center mt-3 font-medium">Solas PC Master v4.2.0</p>
+          <p className="hidden md:block text-[10px] text-slate-500 text-center mt-3 font-medium">Solas Care Pro v4.2.2</p>
         </div>
       </aside>
 

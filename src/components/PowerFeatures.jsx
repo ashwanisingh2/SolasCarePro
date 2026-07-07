@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Zap, Cpu, Clock, Battery, Server
+  Zap, Cpu, Clock, Battery, Server, Wifi, Shield, Trash2, ClipboardList
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -10,38 +10,46 @@ import UltimatePerformance from './UltimatePerformance';
 import CoreParking from './CoreParking';
 import FastStartup from './FastStartup';
 import AdvancedPowerTweaks from './AdvancedPowerTweaks';
+import NetworkMonitor from './NetworkMonitor';
+import PrivacyCleaner from './PrivacyCleaner';
+import StartupManager from './StartupManager';
+import LargeFileFinder from './LargeFileFinder';
+import HistoryLogs from './HistoryLogs';
 
-export default function PowerFeatures({ activeSubTab: propActiveSubTab, setActiveSubTab: propSetActiveSubTab }) {
+export default function PowerFeatures({ activeSubTab: propActiveSubTab, setActiveSubTab: propSetActiveTab }) {
   const [internalSubTab, setInternalSubTab] = useState('performance');
-  
+
   const activeSubTab = propActiveSubTab || internalSubTab;
-  const setActiveSubTab = propSetActiveSubTab || setInternalSubTab;
+  const setActiveSubTab = propSetActiveTab || setInternalSubTab;
 
   const subTabs = [
-    { id: 'performance', label: 'Performance Mode', icon: Cpu },
-    { id: 'battery', label: 'Battery Saver', icon: Battery },
-    { id: 'ultimate', label: 'Ultimate Performance', icon: Zap },
-    { id: 'coreparking', label: 'CPU Core Parking', icon: Cpu },
-    { id: 'faststartup', label: 'Fast Startup', icon: Clock },
-    { id: 'advancedtweaks', label: 'Advanced Tweaks', icon: Server }
+    { id: 'performance',    label: 'Performance Mode',   icon: Cpu },
+    { id: 'battery',        label: 'Battery Saver',      icon: Battery },
+    { id: 'ultimate',       label: 'Ultimate Performance',icon: Zap },
+    { id: 'coreparking',    label: 'CPU Core Parking',   icon: Cpu },
+    { id: 'faststartup',    label: 'Fast Startup',       icon: Clock },
+    { id: 'advancedtweaks', label: 'Advanced Tweaks',    icon: Server },
+    { id: 'network',        label: 'Network Monitor',    icon: Wifi },
+    { id: 'privacy',        label: 'Privacy Cleaner',    icon: Shield },
+    { id: 'startup',        label: 'Startup Manager',    icon: Clock },
+    { id: 'largefiles',     label: 'Large Files',        icon: Trash2 },
+    { id: 'history',        label: 'Repair History',     icon: ClipboardList },
   ];
 
   const renderContent = () => {
     switch (activeSubTab) {
-      case 'performance':
-        return <PerformanceMode />;
-      case 'battery':
-        return <BatterySaver />;
-      case 'ultimate':
-        return <UltimatePerformance />;
-      case 'coreparking':
-        return <CoreParking />;
-      case 'faststartup':
-        return <FastStartup />;
-      case 'advancedtweaks':
-        return <AdvancedPowerTweaks />;
-      default:
-        return <PerformanceMode />;
+      case 'performance':    return <PerformanceMode />;
+      case 'battery':        return <BatterySaver />;
+      case 'ultimate':       return <UltimatePerformance />;
+      case 'coreparking':    return <CoreParking />;
+      case 'faststartup':    return <FastStartup />;
+      case 'advancedtweaks': return <AdvancedPowerTweaks />;
+      case 'network':        return <NetworkMonitor />;
+      case 'privacy':        return <PrivacyCleaner />;
+      case 'startup':        return <StartupManager />;
+      case 'largefiles':     return <LargeFileFinder />;
+      case 'history':        return <HistoryLogs />;
+      default:               return <PerformanceMode />;
     }
   };
 
@@ -50,7 +58,7 @@ export default function PowerFeatures({ activeSubTab: propActiveSubTab, setActiv
       {/* Header Bar */}
       <div className="px-6 py-4 border-b border-brand-border select-none">
         <h2 className="text-lg font-bold text-slate-200">Power Features & Tuning</h2>
-        <p className="text-xs text-slate-400">Optimize, clean, monitor and view logs for your Windows installation</p>
+        <p className="text-xs text-slate-400">Performance, power, network, privacy, and history tools</p>
       </div>
 
       {/* Tabs navigation + Content Panel */}
@@ -74,7 +82,7 @@ export default function PowerFeatures({ activeSubTab: propActiveSubTab, setActiv
             );
           })}
         </div>
-        
+
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto p-4 bg-brand-navy">
           <motion.div

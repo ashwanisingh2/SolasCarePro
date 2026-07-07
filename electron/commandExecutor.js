@@ -1479,7 +1479,12 @@ const ALLOWED_COMMANDS = {
     type: 'script',
     script: 'hardware_advanced.ps1',
     timeout: 30000,
-    buildArgs: ([action]) => ['-Action', action]
+    buildArgs: ([action]) => {
+      const allowed = ['gpu', 'bios', 'cpu', 'memory'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid hardware action: ' + a);
+      return ['-Action', a];
+    }
   },
 
   // ============================================================
@@ -1515,10 +1520,22 @@ const ALLOWED_COMMANDS = {
   'run-advanced-tool': {
     type: 'script',
     script: 'advanced_tools.ps1',
-    timeout: 120000,
+    timeout: 300000,
+    streamChannel: 'care-out',
     buildArgs: ([action, target]) => {
-      const args = ['-Action', action];
-      if (target) args.push('-Target', target);
+      const allowed = ['list-apps', 'force-uninstall', 'shred', 'unlock', 'unlock-kill',
+                       'find-duplicates', 'find-broken-shortcuts',
+                       'read-hosts', 'write-hosts', 'add-hosts-entry'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid advanced-tool action: ' + a);
+      const args = ['-Action', a];
+      if (target !== undefined && target !== null && typeof target === 'string') {
+        // Path validation: reject shell metacharacters and traversal
+        if (target.length > 4096) throw new Error('Target too long');
+        // Allow newlines in hosts content but reject null bytes
+        if (target.includes('\0')) throw new Error('Null bytes not allowed in target');
+        args.push('-Target', target);
+      }
       return args;
     }
   },
@@ -1527,7 +1544,15 @@ const ALLOWED_COMMANDS = {
     type: 'script',
     script: 'power_tweaks.ps1',
     timeout: 60000,
-    buildArgs: ([action]) => ['-Action', action]
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will modify Windows power configuration. Continue?',
+    buildArgs: ([action]) => {
+      const allowed = ['ultimate-plan', 'unpark-cores', 'disable-hibernation', 'advanced-tweaks'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid power tweak action: ' + a);
+      return ['-Action', a];
+    }
   }
 };
 

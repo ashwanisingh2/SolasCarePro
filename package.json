@@ -1,6 +1,6 @@
 {
-  "name": "solas-pc-master",
-  "version": "4.2.1",
+  "name": "solas-care-pro",
+  "version": "4.2.2",
   "description": "Professional-grade Advanced System Repair & Driver Management Suite",
   "main": "main.js",
   "scripts": {

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Zap, Loader2, Server } from 'lucide-react';
+import { Loader2, Zap, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
-import CommandOutput from './shared/CommandOutput';
 
-export default function UltimatePerformance() {
+// Shared PowerTweakCard component used by UltimatePerformance, CoreParking,
+// FastStartup, and AdvancedPowerTweaks. Each instance calls run-power-tweak
+// with a specific action and renders the structured result.
+export function PowerTweakCard({ title, description, action, icon: Icon = Zap, accentColor = 'violet' }) {
   const { addNotification } = useNotification();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -14,57 +15,118 @@ export default function UltimatePerformance() {
     setResult(null);
     try {
       if (window.api) {
-        const res = await window.api.runSystemCommand('run-power-tweak', ['ultimate-plan']);
-        if (res.success) {
-          addNotification('Success', 'Ultimate Performance Plan applied successfully.', 'success');
-          const m = res.stdout.match(/\{[\s\S]*\}/); let out = res.stdout; if (m) { try { out = JSON.parse(m[0]).message || out; } catch(e){} }; setResult(out);
+        const res = await window.api.runSystemCommand('run-power-tweak', [action]);
+        if (res.success && res.stdout) {
+          // Find the last JSON object in stdout (PS may emit log lines before it)
+          const m = res.stdout.match(/\{[\s\S]*\}/g);
+          const obj = m ? JSON.parse(m[m.length - 1]) : null;
+          if (obj) {
+            setResult(obj);
+            addNotification(title, obj.message || 'Tweak applied.', obj.success ? 'success' : 'error');
+          } else {
+            setResult({ success: false, message: 'No JSON output from script.' });
+            addNotification(title, 'No JSON output from script.', 'error');
+          }
         } else {
-          addNotification('Error', res.error || 'Failed to apply tweak', 'error');
-          setResult(res.error || res.stderr);
+          setResult({ success: false, message: res.error || 'Command failed.' });
+          addNotification(title, res.error || 'Command failed.', 'error');
         }
       } else {
-        setTimeout(() => {
-          setResult('Mock successful operation for Ultimate Performance Plan');
-          setLoading(false);
-        }, 1000);
-        return;
+        await new Promise(r => setTimeout(r, 800));
+        const mockResult = {
+          success: true,
+          message: `Mock: ${title} applied successfully.`,
+          planGuid: 'mock-plan-guid',
+          exitCode: 0,
+        };
+        setResult(mockResult);
+        addNotification(title, mockResult.message, 'success');
       }
     } catch (e) {
-      addNotification('Error', e.message, 'error');
-      setResult(e.message);
+      setResult({ success: false, message: e.message });
+      addNotification(title, e.message, 'error');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
+  const colorClasses = {
+    violet: { bg: 'bg-brand-violet/20', border: 'border-brand-violet/40', text: 'text-brand-violet', btn: 'bg-brand-violet hover:bg-brand-violet/80' },
+    cyan:   { bg: 'bg-cyan-500/20',     border: 'border-cyan-500/40',     text: 'text-cyan-400',     btn: 'bg-cyan-500 hover:bg-cyan-400' },
+    amber:  { bg: 'bg-amber-500/20',    border: 'border-amber-500/40',    text: 'text-amber-400',    btn: 'bg-amber-500 hover:bg-amber-400' },
+    rose:   { bg: 'bg-rose-500/20',     border: 'border-rose-500/40',     text: 'text-rose-400',     btn: 'bg-rose-500 hover:bg-rose-400' },
+  };
+  const c = colorClasses[accentColor] || colorClasses.violet;
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-6 space-y-5 text-left">
+      <header className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-200">Ultimate Performance Plan</h2>
-          <p className="text-xs text-slate-400">Unlock and apply the hidden Windows Ultimate Performance power plan for zero latency.</p>
+          <h2 className="text-xl font-bold text-slate-200 flex items-center gap-2">
+            <Icon className={`h-6 w-6 ${c.text}`} />
+            {title}
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">{description}</p>
         </div>
-        <button 
+        <button
           onClick={applyTweak}
           disabled={loading}
-          className="px-6 py-2 bg-brand-violet hover:bg-brand-violet/80 disabled:opacity-50 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2 cursor-pointer"
+          className={`px-6 py-2 ${c.btn} disabled:opacity-50 text-white rounded-lg text-sm font-bold flex items-center gap-2 cursor-pointer`}
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-          {loading ? 'Applying...' : 'Apply Tweak'}
+          {loading ? 'Applying...' : 'Apply'}
         </button>
-      </div>
+      </header>
 
-      <div className="glass-panel border border-brand-border rounded-xl p-6">
-        {result ? (
-          <CommandOutput logs={typeof result === 'string' ? result.split('\n') : [JSON.stringify(result)]} />
-        ) : (
-          <div className="text-center py-8 space-y-4">
-             <Server className="h-10 w-10 text-slate-500 mx-auto" />
-             <p className="text-slate-400 text-sm max-w-md mx-auto">
-               Ready to apply system-level power configuration for maximum performance.
-             </p>
+      {!result && !loading && (
+        <div className="glass-panel border border-brand-border rounded-xl p-8 text-center">
+          <Icon className={`h-10 w-10 ${c.text} mx-auto mb-3 opacity-60`} />
+          <p className="text-sm text-slate-400">Ready to apply. Click the Apply button to run this tweak.</p>
+        </div>
+      )}
+
+      {loading && (
+        <div className="glass-panel border border-brand-border rounded-xl p-8 text-center">
+          <Loader2 className={`h-8 w-8 ${c.text} mx-auto mb-3 animate-spin`} />
+          <p className="text-sm text-slate-400">Applying tweak...</p>
+        </div>
+      )}
+
+      {result && (
+        <div className={`glass-panel border rounded-xl p-5 ${result.success ? 'border-emerald-500/40 bg-emerald-950/10' : 'border-rose-500/40 bg-rose-950/10'}`}>
+          <div className="flex items-center gap-3 mb-3">
+            {result.success ? (
+              <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertTriangle className="h-6 w-6 text-rose-400 shrink-0" />
+            )}
+            <div>
+              <div className={`text-sm font-bold ${result.success ? 'text-emerald-300' : 'text-rose-300'}`}>
+                {result.success ? 'Tweak Applied' : 'Tweak Failed'}
+              </div>
+              <div className="text-xs text-slate-400 mt-0.5">{result.message}</div>
+            </div>
           </div>
-        )}
-      </div>
+          {result.planGuid && (
+            <div className="text-[10px] text-slate-500 font-mono mt-2">Plan GUID: {result.planGuid}</div>
+          )}
+          {result.exitCode !== undefined && (
+            <div className="text-[10px] text-slate-500 font-mono mt-1">Exit code: {result.exitCode}</div>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+export default function UltimatePerformance() {
+  return (
+    <PowerTweakCard
+      title="Ultimate Performance Plan"
+      description="Unlock and apply the hidden Windows Ultimate Performance power plan for zero latency. Best for desktops/workstations on AC power."
+      action="ultimate-plan"
+      icon={Zap}
+      accentColor="violet"
+    />
   );
 }

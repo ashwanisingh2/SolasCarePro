@@ -149,55 +149,45 @@ Describe 'create_restore_point.ps1' -Tag 'Unit' {
 }
 
 # =====================================================================
-# Describe 4: network_optimize.ps1 — behavioral tests
+# Describe 4: power_tweaks.ps1 — behavioral tests (replaces deleted network_optimize.ps1)
 # =====================================================================
-Describe 'network_optimize.ps1' -Tag 'Unit' {
+Describe 'power_tweaks.ps1' -Tag 'Unit' {
 
     BeforeAll {
-        $script:netOptPath = Join-Path $script:scriptsDir 'network_optimize.ps1'
+        $script:powerTweaksPath = Join-Path $script:scriptsDir 'power_tweaks.ps1'
     }
 
-    Context 'check action' {
+    Context 'script structure' {
 
-        BeforeAll {
-            # network_optimize.ps1 uses Windows-only cmdlets (Get-NetAdapterStatistics, netsh)
-            # Skip execution tests on non-Windows. Structure tests still run.
-            $script:isWin = ($PSVersionTable.Platform -eq 'WinNT' -or $PSVersionTable.OS -match 'Windows' -or [System.Environment]::OSVersion.VersionString -match 'Windows')
+        It 'should exist' {
+            Test-Path $script:powerTweaksPath | Should -BeTrue
         }
 
-        It 'should accept Action parameter' {
-            $content = Get-Content -Path $script:netOptPath -Raw
+        It 'should accept Action parameter with valid ValidateSet' {
+            $content = Get-Content -Path $script:powerTweaksPath -Raw
             $content | Should -Match 'param\s*\('
             $content | Should -Match '\$Action'
+            $content | Should -Match 'ultimate-plan'
+            $content | Should -Match 'unpark-cores'
+            $content | Should -Match 'disable-hibernation'
+            $content | Should -Match 'advanced-tweaks'
         }
 
-        It 'should produce some output for check action (even on failure paths)' -Skip:(-not $script:isWin) {
-            $output = & $script:netOptPath -Action 'check' 2>&1 | Out-String
-            $output.Trim() | Should -Not -BeNullOrEmpty -Because 'check action must emit JSON status'
+        It 'should call real powercfg commands (not mock messages)' {
+            $content = Get-Content -Path $script:powerTweaksPath -Raw
+            $content | Should -Match 'powercfg'
+            $content | Should -Match 'setactivescheme|setactive|duplicatescheme'
         }
 
-        It 'should output text containing Network or DNS keyword on reset action' -Skip:(-not $script:isWin) {
-            $output = & $script:netOptPath -Action 'reset' 2>&1 | Out-String
-            ($output -match 'DNS|Network|Reconnecting|Connected|stack|SYSTEM') | Should -BeTrue
-        }
-    }
-
-    Context 'reset action flow' {
-
-        BeforeAll {
-            $script:isWin = ($PSVersionTable.Platform -eq 'WinNT' -or $PSVersionTable.OS -match 'Windows' -or [System.Environment]::OSVersion.VersionString -match 'Windows')
+        It 'should include Test-Admin check for elevation' {
+            $content = Get-Content -Path $script:powerTweaksPath -Raw
+            $content | Should -Match 'Test-Admin'
+            $content | Should -Match 'Administrator'
         }
 
-        It 'should mention netsh reset commands in reset output' -Skip:(-not $script:isWin) {
-            $output = & $script:netOptPath -Action 'reset' 2>&1 | Out-String
-            ($output -match 'Resetting|winsock|catalog|Flushing') | Should -BeTrue
-        }
-
-        It 'should have a reset branch in source code' {
-            $content = Get-Content -Path $script:netOptPath -Raw
-            $content | Should -Match "Action -eq .reset."
-            $content | Should -Match 'netsh winsock reset'
-            $content | Should -Match 'netsh int ip reset'
+        It 'should call Write-AuditLog for audit trail' {
+            $content = Get-Content -Path $script:powerTweaksPath -Raw
+            $content | Should -Match 'Write-AuditLog'
         }
     }
 }
