@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Trash2, ShieldCheck, HardDrive, RefreshCw, 
+import {
+  Trash2, ShieldCheck, HardDrive, RefreshCw,
   CheckCircle2, AlertTriangle, Play, Pause, X, Loader2, Undo2
 } from 'lucide-react';
-import PrivacyCleaner from './PrivacyCleaner';
-import LargeFileFinder from './LargeFileFinder';
 import { formatBytes } from '../utils/formatters';
 import { useNotification } from '../context/NotificationContext';
 
 export default function MaintenanceHub() {
   const { addNotification } = useNotification();
-  const [activeSubTab, setActiveSubTab] = useState('junk'); // 'junk', 'privacy', 'largefiles'
+  // 'privacy' and 'largefiles' tabs removed - those features live under the
+  // Power Features sidebar entry (PowerFeatures.jsx) to avoid duplicate UI.
+  const [activeSubTab, setActiveSubTab] = useState('junk');
   
   // Junk Temp States
   const [junkFiles, setJunkFiles] = useState([]);
@@ -198,9 +198,7 @@ export default function MaintenanceHub() {
       <div className="flex justify-between items-center select-none border-b border-brand-border pb-3">
         <div className="flex gap-4">
           {[
-            { id: 'junk', label: 'Junk & Temp', icon: Trash2 },
-            { id: 'privacy', label: 'Privacy Cleaner', icon: ShieldCheck },
-            { id: 'largefiles', label: 'Large Files', icon: HardDrive }
+            { id: 'junk', label: 'Junk & Temp', icon: Trash2 }
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = activeSubTab === tab.id;
@@ -343,14 +341,6 @@ export default function MaintenanceHub() {
               </div>
             )}
           </div>
-        )}
-
-        {activeSubTab === 'privacy' && (
-          <PrivacyCleaner />
-        )}
-
-        {activeSubTab === 'largefiles' && (
-          <LargeFileFinder />
         )}
       </div>
     </div>

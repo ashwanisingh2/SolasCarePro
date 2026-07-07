@@ -1,9 +1,7 @@
 # registry_hive_repair.ps1
-# Repairs a specific registry hive (SYSTEM, SOFTWARE, SAM, SECURITY, DEFAULT)
+# Repairs a specific registry hive (SYSTEM, SOFTWARE, SAM, SECURITY, DEFAULT, USER)
 # by loading it as a transient hive, running a repair sequence, and unloading.
 # NEW - only full registry backup/restore existed.
-. (Join-Path $PSScriptRoot '_common.ps1')
-
 param(
     [ValidateSet('SYSTEM', 'SOFTWARE', 'SAM', 'SECURITY', 'DEFAULT', 'USER')]
     [string]$Hive = 'SOFTWARE',
@@ -12,6 +10,7 @@ param(
     [string]$Action = 'analyze'
 )
 
+. (Join-Path $PSScriptRoot '_common.ps1')
 $ErrorActionPreference = 'Stop'
 $timer = Start-Timer
 

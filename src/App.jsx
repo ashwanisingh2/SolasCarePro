@@ -6,9 +6,7 @@ import {
 } from 'lucide-react';
 
 const OneClickDashboard = React.lazy(() => import('./components/RepairDashboard'));
-const CoreRepair = React.lazy(() => import('./components/OneClickCare'));
 const SmartRepair = React.lazy(() => import('./components/SmartRepair'));
-const WindowsHealth = React.lazy(() => import('./components/WindowsHealth'));
 const DriverManager = React.lazy(() => import('./components/DriverManager'));
 const PowerFeatures = React.lazy(() => import('./components/PowerFeatures'));
 const HardwareDiagnostics = React.lazy(() => import('./components/HardwareDiagnostics'));
@@ -17,11 +15,6 @@ const BrowserRepair = React.lazy(() => import('./components/BrowserRepair'));
 const MaintenanceHub = React.lazy(() => import('./components/MaintenanceHub'));
 const ServiceManager = React.lazy(() => import('./components/ServiceManager'));
 const RegistryManager = React.lazy(() => import('./components/RegistryManager'));
-const HardwareInfo = React.lazy(() => import('./components/HardwareInfo'));
-const Diagnostics = React.lazy(() => import('./components/Diagnostics'));
-const AutoPilot = React.lazy(() => import('./components/AutoPilot'));
-const FixMyProblem = React.lazy(() => import('./components/FixMyProblem'));
-const QuickFix = React.lazy(() => import('./components/QuickFix'));
 const SettingsView = React.lazy(() => import('./components/Settings'));
 // NEW: Phase 5 components
 const AIDiagnostics = React.lazy(() => import('./components/AIDiagnostics'));
@@ -91,11 +84,7 @@ export default function App() {
 
   // Deep linking and routing mapper
   const handleSetActiveTab = (tabId) => {
-    if (['fix', 'care', 'autopilot', 'quickfix', 'core'].includes(tabId)) {
-      setActiveTab('smart-repair');
-    } else if (['diagnostics', 'windows', 'hardware-info'].includes(tabId)) {
-      setActiveTab('ai-diagnostics');
-    } else if (tabId === 'drivers' || tabId === 'driver') {
+    if (tabId === 'drivers' || tabId === 'driver') {
       setActiveTab('driver');
     } else if (tabId === 'power') {
       setActiveTab('power');

@@ -61,11 +61,34 @@ The compiled executable will be located inside the `dist-electron/` folder as `S
 | Module | Purpose | Underlying Windows Command / API | Script Location |
 | :--- | :--- | :--- | :--- |
 | **Dashboard** | Real-time system performance counters | WMI processor loads, physical memory sizes, disk capacity, and network interface traffic speeds | `main.js` (IPC WMI Collector) |
-| **Driver Manager** | Hardware diagnostics & PnP resets | signed drivers & PnP Error Codes scan, disable (with registry backup and safe-mode controls), enable, and rollback | `scripts/scan_drivers.ps1`<br>`scripts/repair_driver.ps1` |
+| **Driver Manager** (Enterprise) | Full hardware enumeration, health scanning, backup, install, verification, Windows Update search, report export, remote WinRM ops | WMI/CIM (Win32_PnPSignedDriver, Win32_PnPEntity), PnPUtil, DISM Export-WindowsDriver, Get-AuthenticodeSignature, PE header parsing, Microsoft.Update.Session COM, WinRM/PSRemoting. Auto-creates System Restore points before risky ops. Audit-logged. | `scripts/scan_drivers.ps1`<br>`scripts/driver_health_scan.ps1`<br>`scripts/driver_backup.ps1`<br>`scripts/driver_install.ps1`<br>`scripts/driver_verify.ps1`<br>`scripts/driver_wu_search.ps1`<br>`scripts/driver_report.ps1`<br>`scripts/driver_remote.ps1`<br>`scripts/repair_driver.ps1` (legacy device actions) |
 | **Software Updater** | Winget upgrades & network self-healing | check winget updates, execute silent installs, atomic DNS adapter backups, Google DNS port 53 testing, and automated restore | `scripts/scan_software_updates.ps1`<br>`scripts/update_software.ps1` |
-| **One-Click Care** | Repair orchestrator wizard | WMI system restore point checks, whitelisted file junk previews with 30s undo, active network download monitoring, streamed SFC scans with tray minimization, SSD-only TRIM optimization, and security firewall audits | `scripts/get_drives_info.ps1`<br>`scripts/run_trim.ps1`<br>`scripts/junk_cleanup.ps1`<br>`scripts/network_optimize.ps1`<br>`scripts/create_restore_point.ps1`<br>`scripts/enable_restore.ps1` |
-| **Auto-Pilot** | Automated Task Scheduler | Registers weekly SYSTEM-level task scheduler jobs with verification | `scripts/schedule_care.ps1`<br>`scripts/check_task_status.ps1`<br>`scripts/unschedule_care.ps1` |
-| **Diagnostics** | Deep crash and battery evaluations | Minidump parsing fallbacks, custom HTML report compiler, powercfg laptop capacity checks, and disk health metrics | `scripts/analyze_bsod.ps1`<br>`scripts/battery_report.ps1`<br>`scripts/disk_health.ps1` |
+| **Smart Repair** | Recipe-driven repair orchestrator | Pre-flight health check, sequenced recipe runner (7 recipes: pc-slow, internet-issues, blue-screen, windows-update-stuck, disk-issues, system-corruption, freshen-windows), per-step CBS/DISM log parsing | `scripts/pre_repair_health_check.ps1`<br>`scripts/parse_cbs_log.ps1`<br>`scripts/parse_dism_log.ps1`<br>`scripts/sfc_custom_scan.ps1`<br>`scripts/dism_custom_source.ps1`<br>`scripts/registry_hive_repair.ps1`<br>`scripts/driver_verifier.ps1`<br>`scripts/safe_mode_repair.ps1`<br>`scripts/repair_summary_report.ps1` |
+| **AI Diagnostics** | Rule-based diagnostics + self-heal | Metric collection (RAM/disk/updates/drivers), rule-based findings, recipe recommendations, prediction | `scripts/ai_diagnostics.ps1` |
+| **Maintenance Hub** | Junk cleanup + recycle bin | Soft-delete junk with backup + 30s undo window, recycle bin clear | `scripts/junk_cleanup.ps1`<br>`scripts/component_cleanup.ps1` |
+| **Report Center** | Repair-summary reports + driver reports | Last 24h audit-log HTML report, plus driver scan HTML/JSON/CSV reports | `scripts/repair_summary_report.ps1`<br>`scripts/driver_report.ps1`<br>`scripts/generate_report.ps1` |
+
+### 🚀 Driver Manager Module (Enterprise)
+
+A complete enterprise-grade driver management system, accessible from the **Drivers** sidebar entry. Single multi-tab UI (no duplicate components):
+
+| Tab | Functionality |
+| :--- | :--- |
+| **Dashboard** | Health score ring (0-100, color-coded), 6 summary cards (total/healthy/missing/disabled/warnings/unsigned), recent issues timeline |
+| **Devices** | Full device grid with status badges, search across name/vendor/HW-ID/PnP-ID, filters (all/problems/missing/unsigned), per-row Update/Disable/Rollback actions |
+| **Health Scan** | Quick scan (PnP problem codes + signature status) and Full scan (adds 30-day System event log + SetupAPI log parsing). Categorizes issues into 12 types with severity |
+| **Backup** | Full driver backup via DISM `Export-WindowsDriver` + pnputil fallback, with SHA256 manifest verification. List/Verify/Restore/Delete operations. Restore re-installs all INFs from backup |
+| **Install** | Single-INF install, folder bulk-install, driver store browser (pnputil /enum-drivers), force-uninstall by OEM INF name. Auto-creates restore point before install/uninstall |
+| **Verify** | Authenticode signature, WHQL certification, PE architecture match (x64/ARM64/x86), catalog file validation, OS build compatibility check, SHA256 hash, signer certificate details |
+| **Windows Update** | Native WUA COM search for pending driver updates, KB article IDs, install with progress. No third-party driver databases |
+| **Reports** | HTML (styled, self-contained), JSON (structured), CSV (RFC 4180 compliant). Saved to `%APPDATA%\SolasCare\reports\` and viewable in Report Center |
+| **Remote** | WinRM-based operations: test connection, scan remote drivers, install INF on remote (copies file via admin share), backup drivers on remote. Credentials passed via IPC and cleared from memory |
+
+**Safety features (spec TASK 10):**
+- Auto-creates a System Restore point before any install, uninstall, rollback, or backup-restore operation
+- All operations are audit-logged to `%APPDATA%\SolasCare\logs\audit.jsonl` (JSONL format with timestamp, user, action, target, result, details)
+- All path inputs are validated against injection (`..` traversal, shell metacharacters blocked)
+- All PnP device IDs are validated against `^[A-Za-z0-9\\&_.\-{}]+$` regex
 
 ---
 

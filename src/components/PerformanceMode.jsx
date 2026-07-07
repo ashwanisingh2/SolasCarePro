@@ -82,6 +82,22 @@ export default function PerformanceMode({ currentMode, onModeChange }) {
         if (!result.success) {
           console.warn('Power plan change failed:', result.error);
         }
+        // Apply background-apps toggle to match the profile's claim (fixes prior UI lie).
+        // BatterySaver.jsx uses the same allow-listed commands.
+        if (profile.settings.backgroundApps === false) {
+          try {
+            await window.api.runSystemCommand('disable-background-apps');
+          } catch (e) {
+            console.warn('Failed to disable background apps:', e);
+          }
+        } else if (profile.settings.backgroundApps === true && activeMode === 'powerSaving') {
+          // Only re-enable when transitioning OUT of a power-saving mode that disabled them.
+          try {
+            await window.api.runSystemCommand('enable-background-apps');
+          } catch (e) {
+            console.warn('Failed to enable background apps:', e);
+          }
+        }
       } catch (error) {
         console.warn('Failed to apply system settings:', error);
       }

@@ -34,7 +34,7 @@ const repairCards = [
 
 export default function RepairDashboard({ setActiveTab }) {
   const careSteps = [
-    ['Restore Point', 'repair-system-restore'],
+    ['Restore Point', 'create-restore-point'],
     ['Temp Cleanup', 'repair-temp-cleanup'],
     ['DNS Flush', 'flush-dns'],
     ['Network Reset', 'repair-network-full'],

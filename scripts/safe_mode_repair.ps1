@@ -1,14 +1,14 @@
 # safe_mode_repair.ps1
 # Configures Windows to boot into Safe Mode on next restart, optionally running
 # a repair command. NEW - no equivalent existed.
-. (Join-Path $PSScriptRoot '_common.ps1')
-
 param(
     [ValidateSet('configure', 'cancel', 'status')]
     [string]$Action = 'status',
 
     [string]$RepairCommand = ''
 )
+
+. (Join-Path $PSScriptRoot '_common.ps1')
 
 $ErrorActionPreference = 'Stop'
 $timer = Start-Timer

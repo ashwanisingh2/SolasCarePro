@@ -166,3 +166,81 @@ function Get-EnabledAdapters {
 }
 
 # Export nothing - dot-sourcing imports all functions into the caller's scope.
+
+# --- Audit logging (single sink for all SolasCarePro scripts) ---
+# Append-only JSONL audit log at %APPDATA%\SolasCare\logs\audit.jsonl
+# Format: {"ts":"ISO 8601","user":"COMPUTER\\user","action":"...","target":"...",
+#          "result":"success|failure","details":"...","script":"foo.ps1"}
+
+function Get-AuditLogPath {
+    $dir = Join-Path $env:APPDATA 'SolasCare\logs'
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    return Join-Path $dir 'audit.jsonl'
+}
+
+function Write-AuditLog {
+    param(
+        [Parameter(Mandatory=$true)][string]$Action,
+        [string]$Target = '',
+        [ValidateSet('success','failure','started','cancelled')][string]$Result = 'success',
+        [string]$Details = '',
+        [string]$ScriptName = ''
+    )
+    try {
+        $logPath = Get-AuditLogPath
+        # Rotation: if log file exceeds 10 MB, rename to .1 (drop old .1) before appending.
+        # Keeps at most 2 files: audit.jsonl (current) + audit.jsonl.1 (previous).
+        if (Test-Path $logPath) {
+            $size = (Get-Item $logPath).Length
+            if ($size -gt 10MB) {
+                $rotated = "$logPath.1"
+                if (Test-Path $rotated) { Remove-Item $rotated -Force -ErrorAction SilentlyContinue }
+                Rename-Item -Path $logPath -NewName 'audit.jsonl.1' -ErrorAction SilentlyContinue
+            }
+        }
+        $entry = [ordered]@{
+            ts       = (Get-Date).ToString('o')
+            user     = "$env:COMPUTERNAME\$env:USERNAME"
+            action   = $Action
+            target   = $Target
+            result   = $Result
+            details  = ($Details -replace "`r`n",' ' -replace "`n",' ').Trim()
+            script   = if ($ScriptName) { $ScriptName } else { Split-Path $PSCommandPath -Leaf }
+        }
+        $line = $entry | ConvertTo-Json -Compress
+        Add-Content -Path $logPath -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch {
+        # Audit log must never break the operation. Swallow errors.
+    }
+}
+
+# --- Restore-point helper (spec TASK 10) ---
+# Creates a System Restore point before risky operations (driver install/uninstall/
+# rollback, registry edits). Returns $true if created or already exists recently.
+
+function New-SolasRestorePoint {
+    param([string]$Description = 'SolasCarePro operation')
+    try {
+        # WMI SystemRestore class is available on all Windows desktop editions
+        $rp = [wmiclass]'SystemRestore'
+        $status = $rp.CreateRestorePoint($Description, 12, 100)
+        # status.ReturnValue: 0 = success
+        if ($status.ReturnValue -eq 0) {
+            Write-Output "[RESTORE-POINT] Created: $Description"
+            return $true
+        } else {
+            Write-Output "[RESTORE-POINT] WMI returned code $($status.ReturnValue); operation continues without restore point."
+            return $false
+        }
+    } catch {
+        # Fallback: PowerShell cmdlet (needs Windows 10 22H2+ or Windows 11)
+        try {
+            Checkpoint-Computer -Description $Description -RestorePointType 'APPLICATION_INSTALL' -ErrorAction Stop
+            Write-Output "[RESTORE-POINT] Created via Checkpoint-Computer: $Description"
+            return $true
+        } catch {
+            Write-Output "[RESTORE-POINT] Could not create restore point: $($_.Exception.Message)"
+            return $false
+        }
+    }
+}

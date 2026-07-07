@@ -266,22 +266,6 @@ const ALLOWED_COMMANDS = {
       return ['-Id', packageId];
     }
   },
-  'install-software-source': {
-    type: 'powershell',
-    timeout: 600000,
-    streamChannel: 'winget-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will install an application from the selected Winget source/package id. Continue?',
-    buildCommand: ([packageId, source = 'winget']) => {
-      if (typeof packageId !== 'string' || !/^[A-Za-z0-9_.\-]+$/.test(packageId)) {
-        throw new Error('Invalid package id.');
-      }
-      if (typeof source !== 'string' || !/^[A-Za-z0-9_.\-]+$/.test(source)) {
-        throw new Error('Invalid package source.');
-      }
-      return `winget install --id ${packageId} --source ${source} --accept-package-agreements --accept-source-agreements`;
-    }
-  },
   'winget-source-reset': {
     type: 'powershell',
     command: 'winget source reset --force; winget source update',
@@ -305,13 +289,6 @@ const ALLOWED_COMMANDS = {
     timeout: 120000,
     confirmationRequired: true,
     confirmationMessage: 'This will create a Windows restore point before maintenance. Continue?'
-  },
-  'enable-restore': {
-    type: 'script',
-    script: 'enable_restore.ps1',
-    timeout: 120000,
-    confirmationRequired: true,
-    confirmationMessage: 'This will enable Windows System Protection on the system drive. Continue?'
   },
   'junk-scan': {
     type: 'script',
@@ -359,22 +336,6 @@ const ALLOWED_COMMANDS = {
     script: 'get_startup_apps.ps1',
     timeout: 15000
   },
-  'network-check': {
-    type: 'script',
-    script: 'network_optimize.ps1',
-    timeout: 30000,
-    buildArgs: () => ['-Action', 'check']
-  },
-  'network-reset': {
-    type: 'script',
-    script: 'network_optimize.ps1',
-    timeout: 120000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will temporarily disconnect network adapters and reset socket settings. Continue?',
-    buildArgs: ([ssid = '']) => ['-Action', 'reset', '-SSID', String(ssid).slice(0, 64)]
-  },
-
   'run-trim': {
     type: 'script',
     script: 'run_trim.ps1',
@@ -388,30 +349,6 @@ const ALLOWED_COMMANDS = {
       return ['-Drive', driveLetter.toUpperCase()];
     }
   },
-  'check-defender': {
-    type: 'powershell',
-    command: '(Get-Service -Name "WinDefend").Status',
-    timeout: 10000
-  },
-  'check-firewall': {
-    type: 'powershell',
-    command: 'netsh advfirewall show allprofiles state',
-    timeout: 10000
-  },
-  'enable-firewall': {
-    type: 'powershell',
-    command: 'netsh advfirewall set allprofiles state on',
-    timeout: 20000,
-    confirmationRequired: true,
-    confirmationMessage: 'This will enable Windows Firewall for all profiles. Continue?'
-  },
-  'start-defender': {
-    type: 'powershell',
-    command: 'Start-Service -Name "WinDefend"',
-    timeout: 20000,
-    confirmationRequired: true,
-    confirmationMessage: 'This will start Windows Defender service. Continue?'
-  },
   'analyze-bsod': {
     type: 'script',
     script: 'analyze_bsod.ps1',
@@ -421,11 +358,6 @@ const ALLOWED_COMMANDS = {
     type: 'script',
     script: 'battery_report.ps1',
     timeout: 30000
-  },
-  'disk-health': {
-    type: 'script',
-    script: 'disk_health.ps1',
-    timeout: 60000
   },
   'schedule-care': {
     type: 'script',
@@ -440,22 +372,10 @@ const ALLOWED_COMMANDS = {
       return ['-Day', day, '-Time', time];
     }
   },
-  'unschedule-care': {
-    type: 'script',
-    script: 'unschedule_care.ps1',
-    timeout: 30000
-  },
   'check-task-status': {
     type: 'script',
     script: 'check_task_status.ps1',
     timeout: 15000
-  },
-  'start-scheduled-care': {
-    type: 'powershell',
-    command: 'Start-ScheduledTask -TaskName "SolasSystemCarePro_WeeklyCare"',
-    timeout: 15000,
-    confirmationRequired: true,
-    confirmationMessage: 'This will start the scheduled care task immediately. Continue?'
   },
   'repair-system-sfc': {
     type: 'powershell',
@@ -488,14 +408,6 @@ const ALLOWED_COMMANDS = {
     streamChannel: 'care-out',
     confirmationRequired: true,
     confirmationMessage: 'This will restart Explorer and rebuild icon cache. Continue?'
-  },
-  'repair-search-index': {
-    type: 'powershell',
-    command: 'Stop-Service WSearch -Force; Start-Sleep -Seconds 2; Start-Service WSearch; control.exe srchadmin.dll',
-    timeout: 60000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will restart Windows Search and open indexing options. Continue?'
   },
   'repair-winsock': {
     type: 'powershell',
@@ -585,114 +497,6 @@ const ALLOWED_COMMANDS = {
     confirmationRequired: true,
     confirmationMessage: 'This will verify user folder permissions. Continue?'
   },
-  'repair-registry': {
-    type: 'powershell',
-    command: 'DISM /Online /Cleanup-Image /ScanHealth',
-    timeout: 600000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will scan Windows image health before registry-related repair decisions. Continue?'
-  },
-  'repair-bsod': {
-    type: 'powershell',
-    command: 'sfc /scannow; DISM /Online /Cleanup-Image /RestoreHealth',
-    timeout: 2400000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will run core BSOD repair steps and may take a long time. Continue?'
-  },
-  'repair-store': {
-    type: 'powershell',
-    command: 'wsreset.exe; Get-AppxPackage Microsoft.WindowsStore | ForEach-Object { Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\\AppXManifest.xml" }',
-    timeout: 180000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will reset and re-register Microsoft Store. Continue?'
-  },
-  'repair-edge': {
-    type: 'powershell',
-    command: 'Start-Process "msedge.exe" "--disable-extensions --no-first-run"',
-    timeout: 30000,
-    streamChannel: 'care-out'
-  },
-  'repair-office': {
-    type: 'powershell',
-    command: 'Start-Process "appwiz.cpl"',
-    timeout: 15000,
-    streamChannel: 'care-out'
-  },
-  'repair-onedrive': {
-    type: 'powershell',
-    command: 'Start-Process "$env:LOCALAPPDATA\\Microsoft\\OneDrive\\OneDrive.exe" "/reset"',
-    timeout: 60000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will reset OneDrive sync client. Continue?'
-  },
-  'repair-print-spooler': {
-    type: 'powershell',
-    command: 'Stop-Service Spooler -Force; Remove-Item "$env:SystemRoot\\System32\\spool\\PRINTERS\\*" -Force -ErrorAction SilentlyContinue; Start-Service Spooler',
-    timeout: 60000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will clear stuck print jobs and restart Print Spooler. Continue?'
-  },
-  'repair-firewall-service': {
-    type: 'powershell',
-    command: 'Set-Service MpsSvc -StartupType Automatic; Start-Service MpsSvc; netsh advfirewall set allprofiles state on',
-    timeout: 60000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will enable and start Windows Firewall. Continue?'
-  },
-  'repair-defender-service': {
-    type: 'powershell',
-    command: 'Set-Service WinDefend -StartupType Automatic; Start-Service WinDefend',
-    timeout: 60000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will start Windows Defender service. Continue?'
-  },
-  'repair-malware-cleanup': {
-    type: 'powershell',
-    command: 'Start-MpScan -ScanType QuickScan',
-    timeout: 1800000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will run Microsoft Defender Quick Scan. Continue?'
-  },
-  'repair-bcd-scan': {
-    type: 'powershell',
-    command: 'bcdedit /enum all',
-    timeout: 30000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will inspect boot configuration data. Continue?'
-  },
-  'repair-bcd-rebuild': {
-    type: 'powershell',
-    command: 'bootrec /rebuildbcd',
-    timeout: 300000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This is an advanced boot repair operation. Use only when Windows boot entries are damaged. Continue?'
-  },
-  'repair-boot-files': {
-    type: 'powershell',
-    command: 'bootrec /scanos',
-    timeout: 120000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will scan Windows boot entries. Use only when boot repair is needed. Continue?'
-  },
-  'repair-wmi': {
-    type: 'powershell',
-    command: 'winmgmt /verifyrepository; winmgmt /salvagerepository',
-    timeout: 180000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will verify and salvage the WMI repository. Continue?'
-  },
   'repair-registry-permissions': {
     type: 'powershell',
     command: 'secedit /configure /cfg "$env:windir\\inf\\defltbase.inf" /db defltbase.sdb /verbose',
@@ -702,62 +506,6 @@ const ALLOWED_COMMANDS = {
     confirmationMessage: 'This will restore default security policy permissions. Continue?'
   },
 
-  'repair-system-restore': {
-    type: 'script',
-    script: 'create_restore_point.ps1',
-    timeout: 120000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will create a System Restore checkpoint. Continue?'
-  },
-  'collect-diagnostic-logs': {
-    type: 'powershell',
-    command: 'Get-WinEvent -LogName System -MaxEvents 100 | Select-Object TimeCreated,LevelDisplayName,ProviderName,Message | ConvertTo-Json -Compress',
-    timeout: 60000,
-    streamChannel: 'care-out'
-  },
-  'collect-reports': {
-    type: 'powershell',
-    command: 'dxdiag /whql:off /t "$env:TEMP\\solas_dxdiag.txt"; powercfg /batteryreport /output "$env:TEMP\\solas_battery_report.html"',
-    timeout: 120000,
-    streamChannel: 'care-out'
-  },
-  'collect-dumps': {
-    type: 'powershell',
-    command: 'Get-ChildItem "$env:SystemRoot\\Minidump" -Filter *.dmp -ErrorAction SilentlyContinue | Select-Object FullName,Length,LastWriteTime | ConvertTo-Json -Compress',
-    timeout: 30000,
-    streamChannel: 'care-out'
-  },
-  'quick-internet-fix': {
-    type: 'powershell',
-    command: 'ipconfig /flushdns; netsh winsock reset; netsh int ip reset',
-    timeout: 120000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will reset DNS, Winsock, and TCP/IP. Continue?'
-  },
-  'quick-audio-fix': {
-    type: 'powershell',
-    command: 'Restart-Service Audiosrv -Force; Restart-Service AudioEndpointBuilder -Force',
-    timeout: 60000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will restart Windows audio services. Continue?'
-  },
-  'repair-audio-drivers': {
-    type: 'powershell',
-    command: 'Get-PnpDevice -Class System | Where-Object { $_.FriendlyName -match "Audio" } | Disable-PnpDevice -Confirm:$false; Get-PnpDevice -Class System | Where-Object { $_.FriendlyName -match "Audio" } | Enable-PnpDevice -Confirm:$false',
-    timeout: 60000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will disable and re-enable audio devices to reset their driver state. Continue?'
-  },
-  'network-ip-renew': {
-    type: 'powershell',
-    command: 'ipconfig /release; ipconfig /renew',
-    timeout: 60000,
-    streamChannel: 'care-out'
-  },
   'network-adapter-restart': {
     type: 'powershell',
     command: 'Get-NetAdapter | Restart-NetAdapter',
@@ -765,14 +513,6 @@ const ALLOWED_COMMANDS = {
     streamChannel: 'care-out',
     confirmationRequired: true,
     confirmationMessage: 'This will temporarily disable and re-enable all network adapters. Continue?'
-  },
-  'quick-explorer-fix': {
-    type: 'powershell',
-    command: 'Stop-Process -Name explorer -Force; Start-Process explorer.exe',
-    timeout: 30000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will restart Windows Explorer. Continue?'
   },
   'quick-full-system-repair': {
     type: 'powershell',
@@ -796,24 +536,6 @@ const ALLOWED_COMMANDS = {
       });
     }
   },
-  'detect-performance': {
-    type: 'powershell',
-    command: 'Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 ProcessName,CPU,WorkingSet | ConvertTo-Json -Compress',
-    timeout: 30000,
-    streamChannel: 'care-out'
-  },
-  'detect-services': {
-    type: 'powershell',
-    command: 'Get-Service wuauserv,bits,WSearch,Spooler,MpsSvc,WinDefend,Audiosrv | Select-Object Name,Status,StartType | ConvertTo-Json -Compress',
-    timeout: 30000,
-    streamChannel: 'care-out'
-  },
-  'detect-crashes': {
-    type: 'powershell',
-    command: 'Get-WinEvent -FilterHashtable @{LogName=\"System\"; Level=1,2; StartTime=(Get-Date).AddDays(-7)} -MaxEvents 30 | Select-Object TimeCreated,ProviderName,Id,Message | ConvertTo-Json -Compress',
-    timeout: 30000,
-    streamChannel: 'care-out'
-  },
   'open-autoruns-manager': {
     type: 'powershell',
     command: 'Start-Process "C:\\Windows\\System32\\autoruns.exe" -ErrorAction SilentlyContinue; if (-not $?) { Start-Process taskmgr.exe }',
@@ -823,60 +545,6 @@ const ALLOWED_COMMANDS = {
   'open-startup-manager': {
     type: 'powershell',
     command: 'Start-Process taskmgr.exe /n ,4',
-    timeout: 10000,
-    streamChannel: 'care-out'
-  },
-  'open-installed-programs': {
-    type: 'powershell',
-    command: 'Start-Process appwiz.cpl',
-    timeout: 10000,
-    streamChannel: 'care-out'
-  },
-  'open-driver-information': {
-    type: 'powershell',
-    command: 'Start-Process devmgmt.msc',
-    timeout: 10000,
-    streamChannel: 'care-out'
-  },
-  'install-driver-source': {
-    type: 'powershell',
-    timeout: 300000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will install drivers from a local INF folder using pnputil. Continue?',
-    buildCommand: ([driverFolder]) => {
-      if (typeof driverFolder !== 'string') {
-        throw new Error('Invalid driver folder.');
-      }
-      const resolved = path.resolve(driverFolder);
-      if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
-        throw new Error('Driver folder does not exist.');
-      }
-      const escaped = resolved.replace(/"/g, '\\"');
-      return `pnputil /add-driver "${escaped}\\*.inf" /subdirs /install`;
-    }
-  },
-  'open-service-manager': {
-    type: 'powershell',
-    command: 'Start-Process services.msc',
-    timeout: 10000,
-    streamChannel: 'care-out'
-  },
-  'open-scheduled-tasks': {
-    type: 'powershell',
-    command: 'Start-Process taskschd.msc',
-    timeout: 10000,
-    streamChannel: 'care-out'
-  },
-  'open-event-viewer': {
-    type: 'powershell',
-    command: 'Start-Process eventvwr.msc',
-    timeout: 10000,
-    streamChannel: 'care-out'
-  },
-  'open-reliability-monitor': {
-    type: 'powershell',
-    command: 'Start-Process perfmon.exe "/rel"',
     timeout: 10000,
     streamChannel: 'care-out'
   },
@@ -1043,11 +711,6 @@ const ALLOWED_COMMANDS = {
       return JSON.stringify(validated);
     }
   },
-  'get-hardware-info': {
-    type: 'script',
-    script: 'hardware_info.ps1',
-    timeout: 30000
-  },
   'registry-backup': {
     type: 'script',
     script: 'registry_backup.ps1',
@@ -1075,16 +738,6 @@ const ALLOWED_COMMANDS = {
       }
       return ['-Action', 'restore', '-RestoreFile', resolved];
     }
-  },
-  'get-windows-info': {
-    type: 'script',
-    script: 'windows_info.ps1',
-    timeout: 30000
-  },
-  'check-activation': {
-    type: 'script',
-    script: 'activation_check.ps1',
-    timeout: 20000
   },
   'schedule-ram-diagnostic': {
     type: 'script',
@@ -1169,21 +822,6 @@ const ALLOWED_COMMANDS = {
     confirmationMessage: 'IRREVERSIBLE: Component Store cleanup karega aur superseded Windows packages permanently delete karega. 20-30 min lag sakte hain. Continue?',
     buildArgs: () => ['-Action', 'cleanup']
   },
-  'export-driver-backup': {
-    type: 'powershell',
-    timeout: 300000,
-    confirmationRequired: true,
-    confirmationMessage: 'Sare OEM drivers backup folder mein export karega. Continue?',
-    buildCommand: ([folder]) => {
-      if (typeof folder !== 'string') throw new Error('Invalid folder path');
-      const resolved = path.resolve(folder);
-      if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
-        throw new Error('Folder does not exist.');
-      }
-      const escaped = resolved.replace(/"/g, '\\"');
-      return `pnputil /export-driver * "${escaped}"`;
-    }
-  },
   'recycle-bin-cleanup': {
     type: 'powershell',
     command: 'Clear-RecycleBin -Force -ErrorAction SilentlyContinue; Write-Output "Recycle Bin cleared."',
@@ -1191,184 +829,11 @@ const ALLOWED_COMMANDS = {
     confirmationRequired: true,
     confirmationMessage: 'Recycle Bin permanently empty karega. Continue?'
   },
-  'windows-activation-repair': {
-    type: 'powershell',
-    command: 'cscript //nologo C:\\Windows\\System32\\slmgr.vbs /ato',
-    timeout: 60000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'Windows online activation attempt karega. Continue?'
-  },
-  'component-store-scan': {
-    type: 'powershell',
-    command: 'DISM /Online /Cleanup-Image /ScanHealth',
-    timeout: 600000,
-    streamChannel: 'care-out'
-  },
-  'quick-repair-sequence': {
-    type: 'native',
-    handler: async (args) => {
-      const steps = ['flush-dns', 'repair-temp-cleanup', 'repair-icon-cache', 'repair-search-index'];
-      const results = {};
-      const mainWindow = getMainWindowRef();
-      for (const step of steps) {
-        if (mainWindow) {
-          mainWindow.webContents.send('care-out', `[SEQUENCE] Starting step: ${step}...\n`);
-        }
-        const res = await executeAllowedCommand(step, [], { bypassConfirmation: true });
-        results[step] = res;
-        if (mainWindow) {
-          if (res.success) {
-            mainWindow.webContents.send('care-out', `[SEQUENCE] Step ${step} completed successfully.\n`);
-          } else {
-            mainWindow.webContents.send('care-out', `[SEQUENCE] Step ${step} failed: ${res.error || 'Unknown error'}\n`);
-          }
-        }
-      }
-      return JSON.stringify({ success: true, results });
-    }
-  },
-  'deep-repair-sequence': {
-    type: 'native',
-    handler: async (args) => {
-      const steps = ['create-restore-point', 'repair-temp-cleanup', 'repair-system-sfc', 'repair-system-dism', 'flush-dns', 'repair-windows-update'];
-      const results = {};
-      const mainWindow = getMainWindowRef();
-      for (const step of steps) {
-        if (mainWindow) {
-          mainWindow.webContents.send('care-out', `[SEQUENCE] Starting deep step: ${step}...\n`);
-        }
-        const res = await executeAllowedCommand(step, [], { bypassConfirmation: true });
-        results[step] = res;
-        if (mainWindow) {
-          if (res.success) {
-            mainWindow.webContents.send('care-out', `[SEQUENCE] Deep step ${step} completed.\n`);
-          } else {
-            mainWindow.webContents.send('care-out', `[SEQUENCE] Deep step ${step} failed: ${res.error || 'Unknown error'}\n`);
-          }
-        }
-      }
-      return JSON.stringify({ success: true, results });
-    }
-  },
-  'update-all-sequence': {
-    type: 'native',
-    handler: async (args) => {
-      const mainWindow = getMainWindowRef();
-      if (mainWindow) {
-        mainWindow.webContents.send('care-out', `[SEQUENCE] Starting software updates scan...\n`);
-      }
-      const scanRes = await executeAllowedCommand('scan-software-updates', [], { bypassConfirmation: true });
-      let updateCount = 0;
-      if (scanRes.success && scanRes.stdout) {
-        try {
-          const updates = JSON.parse(scanRes.stdout);
-          if (Array.isArray(updates)) {
-            for (const app of updates) {
-              if (mainWindow) {
-                mainWindow.webContents.send('care-out', `[SEQUENCE] Installing software update: ${app.Name || app.Id}...\n`);
-              }
-              await executeAllowedCommand('update-software', [app.Id], { bypassConfirmation: true });
-              updateCount++;
-            }
-          }
-        } catch (e) {
-          if (mainWindow) {
-            mainWindow.webContents.send('care-out', `[SEQUENCE] Custom winget update scan parse failed, trying default updater...\n`);
-          }
-        }
-      }
-      
-      if (mainWindow) {
-        mainWindow.webContents.send('care-out', `[SEQUENCE] Checking maintenance task status...\n`);
-      }
-      await executeAllowedCommand('check-task-status', [], { bypassConfirmation: true });
-      
-      if (mainWindow) {
-        mainWindow.webContents.send('care-out', `[SEQUENCE] Running SSD drive trim optimization...\n`);
-      }
-      await executeAllowedCommand('run-trim', ['C'], { bypassConfirmation: true });
-      
-      return JSON.stringify({ success: true, updatesInstalled: updateCount });
-    }
-  },
-  'driver-update-all': {
-    type: 'native',
-    handler: async (args) => {
-      const mainWindow = getMainWindowRef();
-      if (mainWindow) {
-        mainWindow.webContents.send('care-out', `[SEQUENCE] Scanning hardware drivers for problems...\n`);
-      }
-      const scanRes = await executeAllowedCommand('scan-drivers', [], { bypassConfirmation: true });
-      let driverUpdatesCount = 0;
-      if (scanRes.success && scanRes.stdout) {
-        try {
-          const drivers = JSON.parse(scanRes.stdout);
-          if (Array.isArray(drivers)) {
-            const badDrivers = drivers.filter(d => d.Status !== 'OK' && d.PnpDeviceId);
-            for (const d of badDrivers) {
-              if (mainWindow) {
-                mainWindow.webContents.send('care-out', `[SEQUENCE] Updating faulty driver: ${d.FriendlyName || d.Name}...\n`);
-              }
-              await executeAllowedCommand('driver-action', [d.PnpDeviceId, 'update', true], { bypassConfirmation: true });
-              driverUpdatesCount++;
-            }
-          }
-        } catch (e) {
-          if (mainWindow) {
-            mainWindow.webContents.send('care-out', `[SEQUENCE] Failed to parse driver list: ${e.message}\n`);
-          }
-        }
-      }
-      return JSON.stringify({ success: true, updatedCount: driverUpdatesCount });
-    }
-  },
-  'full-health-check': {
-    type: 'native',
-    handler: async (args) => {
-      const cmdKeys = [
-        'get-hardware-info', 'get-windows-info', 'get-drives-info',
-        'battery-report', 'disk-health', 'detect-network',
-        'detect-services', 'scan-drivers', 'get-ram-diagnostic-result'
-      ];
-      const reportData = {};
-      const mainWindow = getMainWindowRef();
-      for (const cmdKey of cmdKeys) {
-        if (mainWindow) {
-          mainWindow.webContents.send('care-out', `[HEALTH-CHECK] Running check: ${cmdKey}...\n`);
-        }
-        const res = await executeAllowedCommand(cmdKey, [], { bypassConfirmation: true });
-        if (res.success && res.stdout) {
-          try {
-            reportData[cmdKey] = JSON.parse(res.stdout);
-          } catch (e) {
-            reportData[cmdKey] = res.stdout;
-          }
-        } else {
-          reportData[cmdKey] = { error: res.error || 'Failed to query' };
-        }
-      }
-      
-      if (mainWindow) {
-        mainWindow.webContents.send('care-out', `[HEALTH-CHECK] Generating full HTML Diagnostic Report...\n`);
-      }
-      await executeAllowedCommand('generate-system-report', [], { bypassConfirmation: true });
-
-      return JSON.stringify({ success: true, compiledReport: reportData });
-    }
-  },
-
   // ============================================================
   // SMART REPAIR - new repair commands (no duplicates of existing).
   // ============================================================
 
   // NEW: Windows Update history (last 50 installations with status/KB/HResult).
-  'windows-update-history': {
-    type: 'script',
-    script: 'windows_update_history.ps1',
-    timeout: 30000
-  },
-
   // NEW: Boot repair - MBR, boot sector, BCD rebuild (bootrec /fixmbr, /fixboot, /rebuildbcd).
   'repair-boot': {
     type: 'script',
@@ -1386,50 +851,8 @@ const ALLOWED_COMMANDS = {
   },
 
   // NEW: DLL re-registration (regsvr32) - common DLLs or specific path.
-  'reregister-dll': {
-    type: 'script',
-    script: 'reregister_dll.ps1',
-    timeout: 120000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will re-register Windows DLLs via regsvr32. Continue?',
-    buildArgs: ([action, dllPath]) => {
-      const a = String(action || 'common').toLowerCase();
-      if (!['reregister', 'common'].includes(a)) throw new Error('Invalid DLL reregister action: ' + a);
-      const args = ['-Action', a];
-      if (a === 'reregister') {
-        if (typeof dllPath !== 'string' || !dllPath) throw new Error('DllPath is required for reregister action');
-        args.push('-DllPath', dllPath);
-      }
-      return args;
-    }
-  },
-
   // NEW: Reset all power plans to defaults (powercfg -restoredefaultschemes).
-  'reset-power-plans': {
-    type: 'powershell',
-    command: 'powercfg -restoredefaultschemes',
-    timeout: 15000,
-    confirmationRequired: true,
-    confirmationMessage: 'This will reset ALL custom power plans to Windows defaults. Your custom plans will be lost. Continue?'
-  },
-
   // NEW: User profile repair (icon cache, thumbnail cache, font cache, profile permissions).
-  'repair-user-profile': {
-    type: 'script',
-    script: 'repair_user_profile.ps1',
-    timeout: 600000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will clear caches and reset profile permissions. Windows Explorer will restart. Continue?',
-    buildArgs: ([action]) => {
-      const allowed = ['all', 'icon-cache', 'thumbnail-cache', 'font-cache', 'perms'];
-      const a = String(action || 'all').toLowerCase();
-      if (!allowed.includes(a)) throw new Error('Invalid profile repair action: ' + a);
-      return ['-Action', a];
-    }
-  },
-
   // NEW: Windows Disk Cleanup (cleanmgr) - quick / deep / system presets.
   'disk-cleanup': {
     type: 'script',
@@ -1447,33 +870,8 @@ const ALLOWED_COMMANDS = {
   },
 
   // NEW: chkdsk /f /r - schedules a full disk repair on next reboot (destructive).
-  'repair-chkdsk-full': {
-    type: 'powershell',
-    timeout: 30000,
-    confirmationRequired: true,
-    confirmationMessage: 'This will schedule chkdsk /f /r on the system drive for next reboot. The scan can take 1-4 hours. Continue?',
-    buildCommand: ([drive]) => {
-      const d = (typeof drive === 'string' && /^[A-Z]$/i.test(drive)) ? drive.toUpperCase() : 'C';
-      // Schedule chkdsk on next boot via fsutil dirty set + chkntfs - actually use the
-      // "echo Y | chkdsk /f" pattern which prompts for reboot-schedule and auto-confirms.
-      return `echo Y | chkdsk ${d}: /f /r /x`;
-    }
-  },
-
   // NEW: HDD defragmentation (Optimize-Volume -Defrag) for rotational drives.
   // (TRIM for SSDs already exists as run-trim.)
-  'defrag-drive': {
-    type: 'powershell',
-    timeout: 1800000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will defragment the selected HDD. Do NOT run on SSDs. Can take 1-2 hours. Continue?',
-    buildCommand: ([drive]) => {
-      const d = (typeof drive === 'string' && /^[A-Z]$/i.test(drive)) ? drive.toUpperCase() : 'C';
-      return `Optimize-Volume -DriveLetter ${d} -Defrag -Verbose -ErrorAction Stop`;
-    }
-  },
-
   // NEW: Parse CBS.log to extract corrupt files SFC could not repair.
   'parse-cbs-log': {
     type: 'script',
@@ -1500,35 +898,8 @@ const ALLOWED_COMMANDS = {
 
   // NEW: Re-register ALL Appx packages for all users (extends existing repair-store
   // which only re-registers the Store package itself).
-  'repair-store-all-apps': {
-    type: 'powershell',
-    command: "Get-AppxPackage -AllUsers | ForEach-Object { Add-AppxPackage -DisableDevelopmentMode -Register \"$($_.InstallLocation)\\AppXManifest.xml\" -ErrorAction SilentlyContinue }",
-    timeout: 300000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will re-register ALL Windows Store apps for all users. May take 5-10 minutes. Continue?'
-  },
-
   // NEW: WMI repository repair (winmgmt /salvagerepository) - fixes corrupt WMI.
-  'repair-wmi-repository': {
-    type: 'powershell',
-    command: 'winmgmt /salvagerepository',
-    timeout: 120000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will salvage the WMI repository. WMI-dependent services may briefly stop. Continue?'
-  },
-
   // NEW: Clear all Windows event logs (useful when logs are corrupt).
-  'clear-event-logs': {
-    type: 'powershell',
-    command: "wevtutil el | ForEach-Object { try { wevtutil cl \"$_\" } catch {} }",
-    timeout: 120000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'WARNING: This will clear ALL Windows event logs. Diagnostic history will be lost. Continue?'
-  },
-
   // NEW: Smart Repair orchestrator - runs a named recipe (sequence of existing commands).
   // Recipes are defined in the React frontend (SmartRepair.jsx) and dispatched here.
   'smart-repair-recipe': {
@@ -1543,10 +914,11 @@ const ALLOWED_COMMANDS = {
         'pc-slow': [
           ['create-restore-point', [], 'Create Restore Point'],
           ['repair-temp-cleanup', [], 'Clean Temporary Files'],
-          ['junk-scan', [], 'Scan Junk Files'],
+          ['flush-dns', [], 'Flush DNS Cache'],
+          ['repair-winsock', [], 'Reset Winsock'],
+          ['repair-tcpip', [], 'Reset TCP/IP'],
           ['run-trim', [process.env.SystemDrive ? process.env.SystemDrive.charAt(0) : 'C'], 'SSD TRIM Optimization'],
-          ['repair-system-sfc', [], 'System File Checker (SFC)'],
-          ['flush-dns', [], 'Flush DNS Cache']
+          ['repair-system-sfc', [], 'System File Checker (SFC)']
         ],
         'internet-issues': [
           ['flush-dns', [], 'Flush DNS Cache'],
@@ -1743,77 +1115,10 @@ const ALLOWED_COMMANDS = {
 
   // NEW: Conflict detection - check if a conflicting repair is already running.
   // Returns { conflict: true/false, activeCommands: [...] } so the UI can warn.
-  'check-repair-conflicts': {
-    type: 'native',
-    handler: async (args) => {
-      const requestedCmd = args[0];
-      const CONFLICT_GROUPS = {
-        'sfc-family': ['repair-system-sfc', 'verify-sfc', 'sfc-custom-scan', 'quick-full-system-repair'],
-        'dism-family': ['repair-system-dism', 'component-store-scan', 'cleanup-component-store', 'dism-custom-source', 'quick-full-system-repair'],
-        'disk-family': ['repair-chkdsk-scan', 'repair-chkdsk-full', 'defrag-drive', 'run-trim'],
-        'boot-family': ['repair-boot', 'safe-mode-repair', 'repair-bcd-rebuild']
-      };
-      const childCount = activeChildProcesses.size;
-      let conflict = false;
-      let conflictReason = null;
-      if (childCount > 0) {
-        for (const [group, members] of Object.entries(CONFLICT_GROUPS)) {
-          if (members.includes(requestedCmd)) {
-            conflict = true;
-            conflictReason = `Another repair in the "${group}" group may already be running. Wait for it to finish or cancel it first.`;
-            break;
-          }
-        }
-      }
-      return JSON.stringify({ success: true, conflict, conflictReason, activeChildCount: childCount, requestedCommand: requestedCmd });
-    }
-  },
-
   // ============================================================
   // PHASE 5: Missing features (disk benchmark, health score, error analyzer,
   // installed software, sensors, AI diagnostics).
   // ============================================================
-
-  'disk-benchmark': {
-    type: 'script',
-    script: 'disk_benchmark.ps1',
-    timeout: 180000,
-    streamChannel: 'care-out',
-    confirmationRequired: true,
-    confirmationMessage: 'This will run a disk speed benchmark (winsat). Takes 1-2 minutes. Continue?',
-    buildArgs: ([drive]) => {
-      const d = (typeof drive === 'string' && /^[A-Z]$/i.test(drive)) ? drive.toUpperCase() : 'C';
-      return ['-Drive', d];
-    }
-  },
-
-  'health-score': {
-    type: 'script',
-    script: 'health_score.ps1',
-    timeout: 45000
-  },
-
-  'analyze-error-logs': {
-    type: 'script',
-    script: 'error_log_analyzer.ps1',
-    timeout: 60000,
-    buildArgs: ([days]) => {
-      const d = parseInt(days, 10);
-      return ['-DaysBack', (d > 0 && d <= 90) ? String(d) : '7'];
-    }
-  },
-
-  'installed-software': {
-    type: 'script',
-    script: 'installed_software.ps1',
-    timeout: 30000
-  },
-
-  'hardware-sensors': {
-    type: 'script',
-    script: 'hardware_sensors.ps1',
-    timeout: 30000
-  },
 
   'ai-diagnostics': {
     type: 'script',
@@ -1881,6 +1186,188 @@ const ALLOWED_COMMANDS = {
         return JSON.stringify({ success: false, error: e.message });
       }
     }
+  },
+
+  // ============================================================
+  // ENTERPRISE DRIVER MANAGER MODULE (spec v1.0)
+  // All operations on the active DriverManager.jsx UI route through
+  // these 8 command keys. No duplicates - the legacy 'scan-drivers'
+  // and 'driver-action' keys remain only for RepairDashboard.jsx's
+  // simple device table; the new keys below serve the full
+  // enterprise-grade flow (health scan, backup, install, verify,
+  // WU search, report, remote).
+  // ============================================================
+
+  'driver-health-scan': {
+    type: 'script',
+    script: 'driver_health_scan.ps1',
+    timeout: 60000,
+    streamChannel: 'care-out',
+    buildArgs: ([mode]) => {
+      const m = String(mode || 'scan').toLowerCase();
+      if (!['scan', 'full'].includes(m)) throw new Error('Invalid scan mode');
+      return ['-Mode', m];
+    }
+  },
+
+  'driver-backup': {
+    type: 'script',
+    script: 'driver_backup.ps1',
+    timeout: 600000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will create or restore a driver backup. Continue?',
+    buildArgs: ([action, destination, infList, backupId]) => {
+      const allowed = ['backup-all', 'backup-selected', 'restore', 'verify', 'list', 'delete'];
+      const a = String(action || 'list').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid backup action: ' + a);
+      const args = ['-Action', a];
+      if (destination && typeof destination === 'string' && destination.length < 260) {
+        if (/[<>|"`]/.test(destination)) throw new Error('Invalid destination path');
+        args.push('-Destination', destination);
+      }
+      if (infList && typeof infList === 'string' && infList.length < 10000) {
+        args.push('-InfList', infList);
+      }
+      if (backupId && typeof backupId === 'string' && /^[A-Za-z0-9]{1,32}$/.test(backupId)) {
+        args.push('-BackupId', backupId);
+      }
+      return args;
+    }
+  },
+
+  'driver-install': {
+    type: 'script',
+    script: 'driver_install.ps1',
+    timeout: 600000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will add/remove drivers in the Windows driver store. A reboot may be required. Continue?',
+    buildArgs: ([action, pathOrId]) => {
+      const allowed = ['install-inf', 'install-folder', 'uninstall', 'rollback', 'list-store'];
+      const a = String(action || 'list-store').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid install action: ' + a);
+      const args = ['-Action', a];
+      if (pathOrId && typeof pathOrId === 'string' && pathOrId.length < 260) {
+        if (/[<>|"`]/.test(pathOrId) || pathOrId.includes('..')) {
+          throw new Error('Invalid path argument');
+        }
+        if (a === 'install-inf') {
+          args.push('-InfPath', pathOrId);
+        } else if (a === 'install-folder') {
+          args.push('-FolderPath', pathOrId);
+        } else if (a === 'uninstall') {
+          if (!/^[A-Za-z0-9_.\-]+$/.test(pathOrId)) throw new Error('Invalid INF name');
+          args.push('-InfPath', pathOrId);
+        } else if (a === 'rollback') {
+          if (!/^[A-Za-z0-9\\&_.\-{}]+$/.test(pathOrId)) throw new Error('Invalid PnpDeviceId');
+          args.push('-PnpDeviceId', pathOrId);
+        }
+      }
+      return args;
+    }
+  },
+
+  'driver-verify': {
+    type: 'script',
+    script: 'driver_verify.ps1',
+    timeout: 60000,
+    streamChannel: 'care-out',
+    buildArgs: ([infPath, driverPath]) => {
+      if (typeof infPath !== 'string' || !infPath || infPath.length > 260) {
+        throw new Error('INF path required');
+      }
+      if (/[<>|"`]/.test(infPath) || infPath.includes('..')) {
+        throw new Error('Invalid INF path');
+      }
+      const args = ['-InfPath', infPath];
+      if (driverPath && typeof driverPath === 'string' && driverPath.length < 260) {
+        if (/[<>|"`]/.test(driverPath) || driverPath.includes('..')) {
+          throw new Error('Invalid driver path');
+        }
+        args.push('-DriverPath', driverPath);
+      }
+      return args;
+    }
+  },
+
+  'driver-wu-search': {
+    type: 'script',
+    script: 'driver_wu_search.ps1',
+    timeout: 120000,
+    streamChannel: 'care-out',
+    confirmationRequired: false,
+    buildArgs: ([action, updateId]) => {
+      const a = String(action || 'search').toLowerCase();
+      if (!['search', 'download', 'install'].includes(a)) throw new Error('Invalid WU action');
+      const args = ['-Action', a];
+      if (updateId && typeof updateId === 'string' && /^[A-Za-z0-9\-]{1,128}$/.test(updateId)) {
+        args.push('-UpdateId', updateId);
+      }
+      return args;
+    }
+  },
+
+  'driver-report': {
+    type: 'script',
+    script: 'driver_report.ps1',
+    timeout: 60000,
+    buildArgs: ([format, outputPath, includeHealth]) => {
+      const f = String(format || 'html').toLowerCase();
+      if (!['html', 'json', 'csv'].includes(f)) throw new Error('Invalid report format');
+      const args = ['-Format', f];
+      if (outputPath && typeof outputPath === 'string' && outputPath.length < 260) {
+        if (/[<>|"`]/.test(outputPath) || outputPath.includes('..')) {
+          throw new Error('Invalid output path');
+        }
+        args.push('-OutputPath', outputPath);
+      }
+      if (includeHealth === true || includeHealth === 'true') {
+        args.push('-IncludeHealth');
+      }
+      return args;
+    }
+  },
+
+  'driver-remote': {
+    type: 'script',
+    script: 'driver_remote.ps1',
+    timeout: 300000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will perform a remote driver operation via WinRM. Continue?',
+    buildArgs: ([action, computerName, infPath, remoteSavePath, credentialJson]) => {
+      const allowed = ['test', 'scan', 'install', 'backup'];
+      const a = String(action || 'test').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid remote action');
+      if (typeof computerName !== 'string' || !/^[A-Za-z0-9._\-]+$/.test(computerName)) {
+        throw new Error('Invalid computer name');
+      }
+      const args = ['-Action', a, '-ComputerName', computerName];
+      if (infPath && typeof infPath === 'string' && infPath.length < 260) {
+        if (/[<>|"`]/.test(infPath) || infPath.includes('..')) throw new Error('Invalid INF path');
+        args.push('-InfPath', infPath);
+      }
+      if (remoteSavePath && typeof remoteSavePath === 'string' && remoteSavePath.length < 260) {
+        if (/[<>|"`]/.test(remoteSavePath)) throw new Error('Invalid remote save path');
+        args.push('-RemoteSavePath', remoteSavePath);
+      }
+      // Credential JSON is passed as-is; PowerShell side validates and clears from memory.
+      if (credentialJson && typeof credentialJson === 'string' && credentialJson.length < 5000) {
+        args.push('-CredentialJson', credentialJson);
+      }
+      return args;
+    }
+  },
+
+  // Reboot the local system with a 30-second delay (cancellable via shutdown /a).
+  // Used by the DriverManager reboot-required banner after driver installs.
+  'reboot-system': {
+    type: 'powershell',
+    command: 'shutdown.exe /r /t 30 /c "SolasCarePro: A driver operation requires a restart to complete."',
+    timeout: 15000,
+    confirmationRequired: true,
+    confirmationMessage: 'This will restart your computer in 30 seconds. Save your work first. Continue? (Run "shutdown /a" to cancel.)'
   }
 };
 

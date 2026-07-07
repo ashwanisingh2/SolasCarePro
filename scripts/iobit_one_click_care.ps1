@@ -1,7 +1,26 @@
 # iobit_one_click_care.ps1
+# ===================================================================
+# SYNC NOTICE: This script's step list mirrors the 'pc-slow' recipe
+# defined in electron/commandExecutor.js (smart-repair-recipe handler).
+# Both run the same 7 steps in the same order:
+#   1. Create Restore Point
+#   2. Clean Temporary Files
+#   3. Flush DNS Cache
+#   4. Reset Winsock
+#   5. Reset TCP/IP
+#   6. SSD TRIM Optimization
+#   7. System File Checker (SFC)
+# If you add/remove/reorder a step here, mirror the change in the JS
+# recipe, and vice versa. The PS version exists only because Windows
+# Task Scheduler (schedule_care.ps1) cannot invoke JS handlers.
+# ===================================================================
 $ErrorActionPreference = 'Continue'
 
+# Dot-source shared helpers (audit log)
+. (Join-Path $PSScriptRoot '_common.ps1')
+
 Write-Output "=== SOLAS SYSTEM CARE PRO ONE-CLICK MAINTENANCE ==="
+Write-AuditLog -Action 'one-click-care' -Result 'started'
 
 function Run-Step {
     param([string]$Name, [scriptblock]$Action)
@@ -15,22 +34,18 @@ function Run-Step {
     }
 }
 
-# 1. Restore Point
+# 1. Restore Point  (mirrors: create-restore-point)
 Run-Step "Create System Restore Point" {
     $registryPath = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\SystemRestore"
     if (Test-Path $registryPath) {
         Set-ItemProperty -Path $registryPath -Name "SystemRestorePointCreationFrequency" -Value 0 -ErrorAction SilentlyContinue
     }
-    # Fix: Enable-ComputerRestorePoint is NOT a real cmdlet. The correct name
-    # is Enable-ComputerRestore (note: no "Point" suffix). Without this fix,
-    # system restore was never actually enabled before the checkpoint call,
-    # so Checkpoint-Computer would silently fail when System Protection was off.
     Enable-ComputerRestore -Drive "C:\" -ErrorAction SilentlyContinue
     Checkpoint-Computer -Description "SolasCarePro Automated Restore Point" -RestorePointType "APPLICATION_INSTALL" -Confirm:$false
 }
 
-# 2. Junk Cleanup
-Run-Step "System Junk Cleanup" {
+# 2. Clean Temporary Files  (mirrors: repair-temp-cleanup)
+Run-Step "Clean Temporary Files" {
     $tempFolders = @($env:TEMP, "$env:SystemRoot\Temp")
     $totalCleaned = 0
     foreach ($folder in $tempFolders) {
@@ -46,38 +61,46 @@ Run-Step "System Junk Cleanup" {
         }
     }
     $mbCleaned = [Math]::Round($totalCleaned / 1024 / 1024, 2)
-    Write-Output "Cleared temporary junk files. Freed: $mbCleaned MB"
+    Write-Output "Cleared temporary files. Freed: $mbCleaned MB"
 }
 
-# 3. Network Optimize
-Run-Step "Network Optimization" {
+# 3. Flush DNS Cache  (mirrors: flush-dns)
+Run-Step "Flush DNS Cache" {
     Clear-DnsClientCache -ErrorAction SilentlyContinue
+    ipconfig /flushdns | Out-Null
+    Write-Output "DNS client cache cleared."
+}
+
+# 4. Reset Winsock  (mirrors: repair-winsock)
+Run-Step "Reset Winsock" {
     netsh winsock reset | Out-Null
+    Write-Output "Winsock catalog reset."
+}
+
+# 5. Reset TCP/IP  (mirrors: repair-tcpip)
+Run-Step "Reset TCP/IP" {
     netsh int ip reset | Out-Null
-    netsh int tcp set global autotuninglevel=normal -ErrorAction SilentlyContinue
-    Write-Output "Network socket stack refreshed & DNS flushed."
+    Write-Output "TCP/IP stack reset."
 }
 
-# 4. SFC Scan
-Run-Step "System File Checker" {
-    sfc /scannow
-}
-
-# 5. SSD TRIM
-Run-Step "Disk Speed Optimization" {
-    Optimize-Volume -DriveLetter C -ReTrim -Verbose -ErrorAction SilentlyContinue
-}
-
-# 6. Security Audit
-Run-Step "Security Shield Audit" {
-    $defender = Get-Service -Name "WinDefend" -ErrorAction SilentlyContinue
-    if ($defender) {
-        Write-Output "Windows Defender Protection Status: $($defender.Status)"
+# 6. SSD TRIM Optimization  (mirrors: run-trim)
+Run-Step "SSD TRIM Optimization" {
+    $driveLetter = $env:SystemDrive.TrimEnd('\').TrimEnd(':')
+    if (-not $driveLetter) { $driveLetter = 'C' }
+    $drive = Get-PhysicalDisk | Where-Object { $_.MediaType -eq 'SSD' } | Select-Object -First 1
+    if ($drive) {
+        Optimize-Volume -DriveLetter $driveLetter -ReTrim -Verbose -ErrorAction SilentlyContinue
+        Write-Output "TRIM optimization issued on drive $driveLetter`."
+    } else {
+        Write-Output "No SSD detected - skipping TRIM."
     }
-    $firewall = netsh advfirewall show allprofiles state
-    Write-Output "Active Firewall State:"
-    Write-Output ($firewall | Select-String "State")
+}
+
+# 7. System File Checker (SFC)  (mirrors: repair-system-sfc)
+Run-Step "System File Checker (SFC)" {
+    sfc /scannow
 }
 
 Write-Output ""
 Write-Output "=== System Care Routine Execution Completed ==="
+Write-AuditLog -Action 'one-click-care' -Result 'success'
