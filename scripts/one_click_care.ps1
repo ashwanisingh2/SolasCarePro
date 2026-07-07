@@ -1,4 +1,4 @@
-# iobit_one_click_care.ps1
+# one_click_care.ps1
 # ===================================================================
 # SYNC NOTICE: This script's step list mirrors the 'pc-slow' recipe
 # defined in electron/commandExecutor.js (smart-repair-recipe handler).
@@ -19,7 +19,7 @@ $ErrorActionPreference = 'Continue'
 # Dot-source shared helpers (audit log)
 . (Join-Path $PSScriptRoot '_common.ps1')
 
-Write-Output "=== SOLAS SYSTEM CARE PRO ONE-CLICK MAINTENANCE ==="
+Write-Output "=== SOLAS CARE PRO — NATIVE ONE-CLICK MAINTENANCE ==="
 Write-AuditLog -Action 'one-click-care' -Result 'started'
 
 function Run-Step {

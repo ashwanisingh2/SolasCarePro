@@ -173,7 +173,8 @@ function Get-EnabledAdapters {
 #          "result":"success|failure","details":"...","script":"foo.ps1"}
 
 function Get-AuditLogPath {
-    $dir = Join-Path $env:APPDATA 'SolasCare\logs'
+    # Use double Join-Path for cross-platform compatibility (Linux uses /, Windows uses \).
+    $dir = Join-Path (Join-Path $env:APPDATA 'SolasCare') 'logs'
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     return Join-Path $dir 'audit.jsonl'
 }

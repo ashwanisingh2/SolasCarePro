@@ -103,7 +103,7 @@ export default function App() {
   // Removed duplicates from sidebar to keep the tool clean and professional
   const navigation = [
     { id: 'dashboard',    label: 'Dashboard',          icon: LayoutDashboard,  component: OneClickDashboard },
-    { id: 'ai-diagnostics', label: 'AI Diagnostics',   icon: Brain,            component: AIDiagnostics },
+    { id: 'ai-diagnostics', label: 'Smart Diagnostics',   icon: Brain,            component: AIDiagnostics },
     { id: 'smart-repair', label: 'Smart Repair',       icon: Stethoscope,      component: SmartRepair },
     { id: 'driver',       label: 'Drivers',             icon: Cpu,              component: DriverManager },
     { id: 'power',        label: 'Power Features',      icon: Zap,              component: PowerFeatures },

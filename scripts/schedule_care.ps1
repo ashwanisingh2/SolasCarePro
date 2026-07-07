@@ -6,10 +6,10 @@ param (
 
 $ErrorActionPreference = 'Stop'
 $taskName = "SolasSystemCarePro_WeeklyCare"
-$scriptPath = Join-Path $PSScriptRoot "iobit_one_click_care.ps1"
+$scriptPath = Join-Path $PSScriptRoot "one_click_care.ps1"
 
 if (-not (Test-Path $scriptPath)) {
-    Write-Error "Could not find iobit_one_click_care.ps1 at path: $scriptPath"
+    Write-Error "Could not find one_click_care.ps1 at path: $scriptPath"
     exit 1
 }
 

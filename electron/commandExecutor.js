@@ -1368,6 +1368,69 @@ const ALLOWED_COMMANDS = {
     timeout: 15000,
     confirmationRequired: true,
     confirmationMessage: 'This will restart your computer in 30 seconds. Save your work first. Continue? (Run "shutdown /a" to cancel.)'
+  },
+
+  // ============================================================
+  // HARDWARE DIAGNOSTICS MODULE (PROMPT 2)
+  // ============================================================
+
+  'run-cpu-stress-test': {
+    type: 'script',
+    script: 'cpu_stress_test.ps1',
+    timeout: 600000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will run a CPU stress test that maxes out all cores for the specified duration. Other apps may become unresponsive. Continue?',
+    buildArgs: ([durationSec, cores]) => {
+      const d = parseInt(durationSec, 10);
+      if (isNaN(d) || d < 1 || d > 600) throw new Error('DurationSec must be 1-600');
+      const args = ['-DurationSec', String(d)];
+      const c = parseInt(cores, 10);
+      if (!isNaN(c) && c > 0 && c <= 64) {
+        args.push('-Cores', String(c));
+      }
+      return args;
+    }
+  },
+
+  'run-smart-check': {
+    type: 'script',
+    script: 'smart_check.ps1',
+    timeout: 60000,
+    streamChannel: 'care-out',
+    buildArgs: ([driveLetter]) => {
+      if (typeof driveLetter !== 'string' || !/^[A-Za-z]$/.test(driveLetter)) {
+        throw new Error('DriveLetter must be a single letter A-Z');
+      }
+      return ['-DriveLetter', driveLetter];
+    }
+  },
+
+  // ============================================================
+  // NETWORK MONITOR MODULE (PROMPT 3)
+  // ============================================================
+
+  'run-ping-test': {
+    type: 'script',
+    script: 'ping_test.ps1',
+    timeout: 60000,
+    buildArgs: ([hostname, count]) => {
+      if (typeof hostname !== 'string' || !hostname || hostname.length > 255 || /[<>|"`]/.test(hostname)) {
+        throw new Error('Invalid hostname');
+      }
+      const args = ['-Hostname', hostname];
+      const c = parseInt(count, 10);
+      if (!isNaN(c) && c >= 1 && c <= 20) {
+        args.push('-Count', String(c));
+      }
+      return args;
+    }
+  },
+
+  'get-network-adapters': {
+    type: 'script',
+    script: 'network_adapters.ps1',
+    timeout: 30000
   }
 };
 

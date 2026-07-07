@@ -2,12 +2,12 @@
 # Runs Windows Disk Cleanup (cleanmgr.exe) in unattended mode using a pre-configured
 # sageset profile. NEW - junk_cleanup.ps1 only handles temp/junk files, not the full
 # cleanmgr suite (Windows Update cache, delivery optimization, old OS files, etc.).
-. (Join-Path $PSScriptRoot '_common.ps1')
-
 param(
     [ValidateSet('quick', 'deep', 'system')]
     [string]$Mode = 'quick'
 )
+
+. (Join-Path $PSScriptRoot '_common.ps1')
 
 $ErrorActionPreference = 'Stop'
 $timer = Start-Timer

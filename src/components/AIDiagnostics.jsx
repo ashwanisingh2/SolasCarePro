@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Brain, Activity, AlertTriangle, CheckCircle2, XCircle, Loader2,
+  Stethoscope, Activity, AlertTriangle, CheckCircle2, XCircle, Loader2,
   TrendingDown, Wrench, Zap, Shield, RefreshCw, Lightbulb, ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -38,7 +38,7 @@ export default function AIDiagnostics() {
         if (action === 'self-heal') setSelfHeal({ success: true, healingNeeded: true, topIssue: { diagnosis: 'Moderate RAM usage.', severity: 'info' }, recommendedRecipe: 'pc-slow', message: 'Mock: recommend pc-slow recipe.' });
       }
     } catch (e) {
-      addNotification('AI Diagnostics', 'Analysis failed: ' + e.message, 'error');
+      addNotification('Smart Diagnostics', 'Analysis failed: ' + e.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -48,10 +48,10 @@ export default function AIDiagnostics() {
 
   const runSelfHealRecipe = async () => {
     if (!selfHeal || !selfHeal.recommendedRecipe) return;
-    const ok = await confirm({ title: 'AI Self-Heal', message: `Run recommended repair recipe: "${selfHeal.recommendedRecipe}"?`, confirmLabel: 'Run Recipe', danger: selfHeal.topIssue.severity === 'critical' });
+    const ok = await confirm({ title: 'Smart Self-Heal', message: `Run recommended repair recipe: "${selfHeal.recommendedRecipe}"?`, confirmLabel: 'Run Recipe', danger: selfHeal.topIssue.severity === 'critical' });
     if (!ok) return;
     if (window.api) {
-      addNotification('AI Self-Heal', `Starting recipe: ${selfHeal.recommendedRecipe}...`, 'info');
+      addNotification('Smart Self-Heal', `Starting recipe: ${selfHeal.recommendedRecipe}...`, 'info');
       const res = await window.api.runSystemCommand('smart-repair-recipe', [selfHeal.recommendedRecipe]);
       addNotification(res.success ? 'Self-Heal Complete' : 'Self-Heal Issue', res.success ? 'Recipe completed.' : (res.error || 'Check Smart Repair tab.'), res.success ? 'success' : 'warning');
     }
@@ -74,7 +74,7 @@ export default function AIDiagnostics() {
   };
 
   const tabs = [
-    { id: 'diagnose', label: 'Smart Diagnostics', icon: Brain },
+    { id: 'diagnose', label: 'Smart Diagnostics', icon: Stethoscope },
     { id: 'recommend', label: 'Recommendations', icon: Lightbulb },
     { id: 'predict', label: 'Predictive Failure', icon: TrendingDown },
     { id: 'self-heal', label: 'Self-Healing', icon: Wrench }
@@ -85,10 +85,11 @@ export default function AIDiagnostics() {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-xl font-bold text-slate-200 flex items-center gap-2">
-            <Brain className="h-6 w-6 text-brand-violet" />
-            AI Diagnostic Engine
+            <Stethoscope className="h-6 w-6 text-brand-violet" />
+            Smart Diagnostics
           </h2>
           <p className="text-xs text-slate-400 mt-1">Intelligent system analysis with rule-based expert system, predictive failure detection, and self-healing</p>
+          <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-slate-800 text-slate-600 text-[10px] font-semibold">Powered by rule-based Windows diagnostics engine</span>
         </div>
         <button onClick={() => runAnalysis(activeTab)} disabled={loading} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-lg border border-brand-border text-slate-300 flex items-center gap-2 cursor-pointer disabled:opacity-50">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -113,7 +114,7 @@ export default function AIDiagnostics() {
         <div className="glass-panel border border-brand-border rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <Loader2 className="h-5 w-5 animate-spin text-brand-violet" />
-            <p className="text-sm text-slate-300">AI engine analyzing system metrics...</p>
+            <p className="text-sm text-slate-300">Smart engine analyzing system metrics...</p>
           </div>
           <Skeleton rows={4} />
         </div>
@@ -197,7 +198,8 @@ export default function AIDiagnostics() {
             {activeTab === 'predict' && predictions && (
               <div className="space-y-4">
                 {predictions.predictions && predictions.predictions.length > 0 ? (
-                  predictions.predictions.map((p, i) => (
+                  <>
+                  {predictions.predictions.map((p, i) => (
                     <div key={i} className={`glass-panel border rounded-xl p-4 ${severityColor(p.severity)}`}>
                       <div className="flex items-start gap-3">
                         <TrendingDown className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
@@ -214,12 +216,15 @@ export default function AIDiagnostics() {
                         </div>
                       </div>
                     </div>
-                  ))
+                  ))}
+                  <p className="italic text-slate-500 text-[10px] mt-2">Predictions are estimates based on current system metrics, not machine learning.</p>
+                  </>
                 ) : (
                   <div className="glass-panel border border-emerald-500/30 rounded-xl p-8 text-center">
                     <Shield className="h-10 w-10 text-emerald-400 mx-auto mb-2" />
                     <p className="text-sm font-bold text-slate-200">No Failures Predicted</p>
                     <p className="text-xs text-slate-400">System health is stable. No imminent hardware failures detected.</p>
+                    <p className="italic text-slate-500 text-[10px] mt-3">Predictions are estimates based on current system metrics, not machine learning.</p>
                   </div>
                 )}
               </div>
