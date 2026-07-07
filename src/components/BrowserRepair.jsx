@@ -24,9 +24,18 @@ export default function BrowserRepair() {
       if (window.api) {
         const res = await window.api.runSystemCommand('detect-browsers');
         if (res.success && res.stdout) {
-          const found = JSON.parse(res.stdout.trim());
-          setBrowsers(found);
-          addLogs(`[OK] Detection complete: Chrome: ${found.chrome ? 'installed' : 'not found'}, Edge: ${found.edge ? 'installed' : 'not found'}, Firefox: ${found.firefox ? 'installed' : 'not found'}, Brave: ${found.brave ? 'installed' : 'not found'}, Opera: ${found.opera ? 'installed' : 'not found'}`);
+          let found = null;
+          try { found = JSON.parse(res.stdout.trim()); }
+          catch {
+            const m = res.stdout.match(/\{[\s\S]*\}/);
+            if (m) { try { found = JSON.parse(m[0]); } catch {} }
+          }
+          if (found) {
+            setBrowsers(found);
+            addLogs(`[OK] Detection complete: Chrome: ${found.chrome ? 'installed' : 'not found'}, Edge: ${found.edge ? 'installed' : 'not found'}, Firefox: ${found.firefox ? 'installed' : 'not found'}, Brave: ${found.brave ? 'installed' : 'not found'}, Opera: ${found.opera ? 'installed' : 'not found'}`);
+          } else {
+            addLogs('[ERROR] Could not parse browser detection output.');
+          }
         } else {
           addLogs('[ERROR] Failed to scan browser installations.');
         }
@@ -53,9 +62,19 @@ export default function BrowserRepair() {
       if (window.api) {
         const res = await window.api.runSystemCommand('reset-browser-cache', [browserName]);
         if (res.success && res.stdout) {
-          const detail = JSON.parse(res.stdout);
-          addNotification('Cache Cleared', `Successfully cleared cache for ${browserName}. Freed ${detail.freedSpaceMB || 0} MB.`, 'success');
-          addLogs(`[OK] Successfully cleared cache for ${browserName}. Freed ${detail.freedSpaceMB || 0} MB.`);
+          let detail = null;
+          try { detail = JSON.parse(res.stdout.trim()); }
+          catch {
+            const m = res.stdout.match(/\{[\s\S]*\}/);
+            if (m) { try { detail = JSON.parse(m[0]); } catch {} }
+          }
+          if (detail) {
+            addNotification('Cache Cleared', `Successfully cleared cache for ${browserName}. Freed ${detail.freedSpaceMB || 0} MB.`, 'success');
+            addLogs(`[OK] Successfully cleared cache for ${browserName}. Freed ${detail.freedSpaceMB || 0} MB.`);
+          } else {
+            addNotification('Cache Cleared', `Cleared cache for ${browserName}.`, 'success');
+            addLogs(`[OK] Cleared cache for ${browserName}.`);
+          }
         } else if (res.cancelled) {
           addNotification('Cache Clear', 'Operation cancelled by user.', 'info');
           addLogs(`[WARN] Cache clear for ${browserName} was cancelled by user.`);
@@ -84,9 +103,19 @@ export default function BrowserRepair() {
       if (window.api) {
         const res = await window.api.runSystemCommand('reset-browser-full', [browserName]);
         if (res.success && res.stdout) {
-          const detail = JSON.parse(res.stdout);
-          addNotification('Browser Reset Complete', `Successfully completed full reset of ${browserName}. Freed ${detail.freedSpaceMB || 0} MB.`, 'success');
-          addLogs(`[OK] Successfully completed full reset of ${browserName}. Freed ${detail.freedSpaceMB || 0} MB.`);
+          let detail = null;
+          try { detail = JSON.parse(res.stdout.trim()); }
+          catch {
+            const m = res.stdout.match(/\{[\s\S]*\}/);
+            if (m) { try { detail = JSON.parse(m[0]); } catch {} }
+          }
+          if (detail) {
+            addNotification('Browser Reset Complete', `Successfully completed full reset of ${browserName}. Freed ${detail.freedSpaceMB || 0} MB.`, 'success');
+            addLogs(`[OK] Successfully completed full reset of ${browserName}. Freed ${detail.freedSpaceMB || 0} MB.`);
+          } else {
+            addNotification('Browser Reset Complete', `Completed full reset of ${browserName}.`, 'success');
+            addLogs(`[OK] Completed full reset of ${browserName}.`);
+          }
         } else if (res.cancelled) {
           addNotification('Browser Reset', 'Operation cancelled by user.', 'info');
           addLogs(`[WARN] Profile reset for ${browserName} was cancelled by user.`);

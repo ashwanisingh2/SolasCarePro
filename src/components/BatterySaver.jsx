@@ -20,7 +20,8 @@ export default function BatterySaver() {
         if (res.success && res.stdout) {
           const match = res.stdout.match(/\{[\s\S]*\}/);
           if (match) {
-            setBatteryInfo(JSON.parse(match[0]));
+            try { setBatteryInfo(JSON.parse(match[0])); }
+            catch { console.warn('Battery report: JSON parse failed'); }
           }
         }
       } else {

@@ -130,10 +130,19 @@ export default function DriverManager() {
       if (window.api) {
         const res = await window.api.runSystemCommand('scan-drivers');
         if (res.success && res.stdout) {
-          const list = JSON.parse(res.stdout.trim());
-          setDevices(list);
-          const issueCount = list.filter(d => d.Status !== 'OK').length;
-          setStatusMessage(`Found ${list.length} devices (${issueCount} with issues).`);
+          let list = null;
+          try { list = JSON.parse(res.stdout.trim()); }
+          catch {
+            const m = res.stdout.match(/\[[\s\S]*\]/) || res.stdout.match(/\{[\s\S]*\}/);
+            if (m) { try { list = JSON.parse(m[0]); if (!Array.isArray(list)) list = [list]; } catch {} }
+          }
+          if (Array.isArray(list)) {
+            setDevices(list);
+            const issueCount = list.filter(d => d.Status !== 'OK').length;
+            setStatusMessage(`Found ${list.length} devices (${issueCount} with issues).`);
+          } else {
+            setStatusMessage('Driver scan: could not parse output.');
+          }
         } else {
           setStatusMessage('Driver scan failed: ' + (res.error || 'WMI service error'));
         }

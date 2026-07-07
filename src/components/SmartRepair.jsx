@@ -173,7 +173,18 @@ export default function SmartRepair() {
       if (window.api) {
         const res = await window.api.runSystemCommand('pre-repair-health-check');
         if (res.success && res.stdout) {
-          setHealthCheck(JSON.parse(res.stdout.trim()));
+          try {
+            setHealthCheck(JSON.parse(res.stdout.trim()));
+          } catch {
+            // PS may emit log lines before JSON - find the JSON object
+            const m = res.stdout.match(/\{[\s\S]*\}/);
+            if (m) {
+              try { setHealthCheck(JSON.parse(m[0])); }
+              catch { setHealthCheck({ canProceed: true, blockers: [], warnings: ['Could not parse health check output'], message: 'Proceeding anyway.' }); }
+            } else {
+              setHealthCheck({ canProceed: true, blockers: [], warnings: ['Health check returned no JSON'], message: 'Proceeding anyway.' });
+            }
+          }
         }
       } else {
         setHealthCheck({
@@ -282,7 +293,12 @@ export default function SmartRepair() {
       if (window.api) {
         const res = await window.api.runSystemCommand('parse-cbs-log');
         if (res.success && res.stdout) {
-          setCbsReport(JSON.parse(res.stdout.trim()));
+          try { setCbsReport(JSON.parse(res.stdout.trim())); }
+          catch {
+            const m = res.stdout.match(/\{[\s\S]*\}/);
+            if (m) { try { setCbsReport(JSON.parse(m[0])); } catch { setCbsReport({ success: false, message: 'Could not parse CBS report' }); } }
+            else { setCbsReport({ success: false, message: 'CBS report returned no JSON' }); }
+          }
         }
       } else {
         setCbsReport({
@@ -309,7 +325,12 @@ export default function SmartRepair() {
       if (window.api) {
         const res = await window.api.runSystemCommand('parse-dism-log');
         if (res.success && res.stdout) {
-          setDismReport(JSON.parse(res.stdout.trim()));
+          try { setDismReport(JSON.parse(res.stdout.trim())); }
+          catch {
+            const m = res.stdout.match(/\{[\s\S]*\}/);
+            if (m) { try { setDismReport(JSON.parse(m[0])); } catch { setDismReport({ success: false, message: 'Could not parse DISM report' }); } }
+            else { setDismReport({ success: false, message: 'DISM report returned no JSON' }); }
+          }
         }
       } else {
         setDismReport({ success: true, outcome: 'Success', errorCount: 0, warningCount: 2, errors: [], warnings: ['Mock warning'], message: 'Mock: DISM completed successfully.' });

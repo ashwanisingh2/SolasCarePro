@@ -24,11 +24,19 @@ export default function AIDiagnostics() {
       if (window.api) {
         const res = await window.api.runSystemCommand('ai-diagnostics', [action]);
         if (res.success && res.stdout) {
-          const parsed = JSON.parse(res.stdout.trim());
-          if (action === 'diagnose') setDiagnosis(parsed);
-          if (action === 'recommend') setRecommendations(parsed);
-          if (action === 'predict') setPredictions(parsed);
-          if (action === 'self-heal') setSelfHeal(parsed);
+          let parsed = null;
+          try { parsed = JSON.parse(res.stdout.trim()); }
+          catch {
+            // PS may emit log lines before the JSON object - find it
+            const m = res.stdout.match(/\{[\s\S]*\}/);
+            if (m) { try { parsed = JSON.parse(m[0]); } catch {} }
+          }
+          if (parsed) {
+            if (action === 'diagnose') setDiagnosis(parsed);
+            if (action === 'recommend') setRecommendations(parsed);
+            if (action === 'predict') setPredictions(parsed);
+            if (action === 'self-heal') setSelfHeal(parsed);
+          }
         }
       } else {
         await new Promise(r => setTimeout(r, 1500));
