@@ -12,21 +12,26 @@ $ErrorActionPreference = 'Stop'
 $timer = Start-Timer
 
 try {
-    $auditLog = "$env:APPDATA\SolasCare\logs\audit.log"
+    $auditLog = "$env:APPDATA\SolasCare\logs\audit.jsonl"
     $reportDir = "$env:APPDATA\SolasCare\reports"
     if (-not (Test-Path $reportDir)) { New-Item -ItemType Directory -Path $reportDir -Force | Out-Null }
 
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
     $reportPath = Join-Path $reportDir "RepairSummary_$timestamp.html"
 
-    # Read audit log entries from the last N hours
+    # Read audit log entries from the last N hours.
+    # Schema: {"ts":"ISO 8601","user":"...","action":"...","target":"...",
+    #          "result":"success|failure","details":"...","script":"..."}
+    # Both main.js (IPC layer) and PS scripts (_common.ps1 Write-AuditLog) write here.
     $auditEntries = @()
     if (Test-Path $auditLog) {
         $cutoff = (Get-Date).AddHours(-$HoursBack)
         Get-Content $auditLog -Tail 500 | ForEach-Object {
             try {
                 $entry = $_ | ConvertFrom-Json
-                if ([datetime]$entry.timestamp -ge $cutoff) {
+                # Unified schema uses 'ts' (ISO 8601). Fall back to legacy 'timestamp' field.
+                $entryTs = if ($entry.ts) { $entry.ts } else { $entry.timestamp }
+                if ($entryTs -and ([datetime]$entryTs -ge $cutoff)) {
                     $auditEntries += $entry
                 }
             } catch {}

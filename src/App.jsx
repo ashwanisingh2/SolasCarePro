@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  LayoutDashboard, Wrench, MonitorCheck, Cpu, CircuitBoard, Package, Globe, 
+import {
+  LayoutDashboard, Wrench, MonitorCheck, Cpu, CircuitBoard, Package, Globe,
   Sparkles, Settings2, Database, Info, Activity, Bot, LifeBuoy, Zap, Settings,
   Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope, Brain, FileText,
   Trash2, Scissors, Copy, FileX, Unlock
 } from 'lucide-react';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const OneClickDashboard = React.lazy(() => import('./components/RepairDashboard'));
 const SmartRepair = React.lazy(() => import('./components/SmartRepair'));
@@ -154,6 +155,7 @@ export default function App() {
   }
 
   return (
+    <ErrorBoundary>
     <div className="flex h-screen w-screen overflow-hidden bg-brand-navy font-sans text-white transition-colors duration-300">
       {/* Sidebar Navigation */}
       <aside className="w-16 md:w-64 bg-slate-900 border-r border-brand-border flex flex-col justify-between p-3 md:p-4 select-none overflow-y-auto shrink-0 transition-all duration-350">
@@ -283,5 +285,6 @@ export default function App() {
         </div>
       </main>
     </div>
+    </ErrorBoundary>
   );
 }

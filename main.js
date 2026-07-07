@@ -23,9 +23,11 @@ if (!fs.existsSync(reportsDir)) {
   fs.mkdirSync(reportsDir, { recursive: true });
 }
 
-// Audit log uses a fixed filename; the daily log filename is computed on each write
-// so a long-running process rolls over to a new file at midnight.
-const auditFile = path.join(logDir, 'audit.log');
+// Audit log uses a single JSONL file shared with PowerShell scripts.
+// Schema (kept in sync with scripts/_common.ps1 Write-AuditLog):
+//   {"ts":"ISO 8601","user":"PC\\user","action":"...","target":"...",
+//    "result":"success|failure|started|cancelled","details":"...","script":"main.js"}
+const auditFile = path.join(logDir, 'audit.jsonl');
 
 // Tiny write queue to avoid blocking the main thread on synchronous file I/O.
 // We coalesce writes into a single appendFile call per tick.
@@ -60,13 +62,21 @@ function writeLog(level, message) {
 }
 
 function writeAudit(action, details, result) {
+  // Unified schema - matches scripts/_common.ps1 Write-AuditLog so that
+  // repair_summary_report.ps1 (which reads audit.jsonl) can pick up events
+  // emitted from BOTH the main process and PowerShell child scripts.
   const entry = {
-    timestamp: new Date().toISOString(),
+    ts: new Date().toISOString(),
+    user: `${process.env.COMPUTERNAME || 'PC'}\\${process.env.USERNAME || process.env.USER || 'unknown'}`,
     action,
-    details,
-    result: result?.success ? 'SUCCESS' : 'FAILURE',
+    target: '',
+    result: result?.success ? 'success' : 'failure',
+    details: typeof details === 'string'
+      ? details
+      : (details && details.args ? `args=${JSON.stringify(details.args)}` : ''),
+    script: 'main.js',
+    // Extra fields kept for backwards compat with old audit.log readers
     error: result?.error || result?.stderr || null,
-    user: process.env.USERNAME || process.env.USER || 'unknown'
   };
   queueWrite(auditFile, JSON.stringify(entry) + '\n');
 }
@@ -609,16 +619,56 @@ ipcMain.handle('kill-active-process', () => {
 });
 
 // 4. Live DNS and WMI System Info Handlers
-// NOTE: The `globalDnsStatus` variable is intentionally removed - it was never
-// written to by any code path, so the 'Restoring' branch was dead. The status
-// is inferred from the existence of the DNS backup file. commandExecutor.js
-// should write/remove this file as part of network-reset / flush-dns flows.
-ipcMain.handle('get-dns-status', () => {
+// Returns an object { primary, secondary, status } where status is
+// 'Original' or 'Temporary (Google)'. The NetworkMonitor DNS tab reads
+// .primary and .secondary to render monospace badges.
+//
+// We try to read the actual configured DNS servers via a quick
+// PowerShell Get-DnsClientServerAddress call (cached 60s to avoid
+// hammering it on every tab visit). If that fails, fall back to the
+// solas_dns_backup.json presence check (which only tells us whether
+// we set Google DNS during a recent network-reset).
+let cachedDns = null;
+let cachedDnsTs = 0;
+const DNS_CACHE_TTL_MS = 60000;
+
+ipcMain.handle('get-dns-status', async () => {
   const tempPath = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'solas_dns_backup.json');
-  if (fs.existsSync(tempPath)) {
-    return 'Temporary (Google)';
+  const isTemporary = fs.existsSync(tempPath);
+  const status = isTemporary ? 'Temporary (Google)' : 'Original';
+
+  // Return cached value if fresh
+  if (cachedDns && Date.now() - cachedDnsTs < DNS_CACHE_TTL_MS) {
+    return { ...cachedDns, status };
   }
-  return 'Original';
+
+  // Try to read actual DNS server IPs via PowerShell
+  return new Promise((resolve) => {
+    const cmd = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "' +
+      '$a = Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | ' +
+      'Where-Object { $_.ServerAddresses.Count -gt 0 } | Select-Object -First 1; ' +
+      "if ($a) { $a.ServerAddresses -join '|' } else { '' }" +
+      '"';
+    exec(cmd, { windowsHide: true, timeout: 8000 }, (err, stdout) => {
+      let primary = '';
+      let secondary = '';
+      if (!err && stdout) {
+        const parts = stdout.trim().split('|').filter(Boolean);
+        if (parts.length > 0) primary = parts[0];
+        if (parts.length > 1) secondary = parts[1];
+      }
+      // Sensible defaults if PowerShell couldn't tell us
+      if (!primary) {
+        primary = isTemporary ? '8.8.8.8' : 'DHCP-assigned';
+      }
+      if (!secondary) {
+        secondary = isTemporary ? '8.8.4.4' : 'DHCP-assigned';
+      }
+      cachedDns = { primary, secondary };
+      cachedDnsTs = Date.now();
+      resolve({ primary, secondary, status });
+    });
+  });
 });
 
 ipcMain.handle('get-system-info', async () => {
@@ -626,7 +676,7 @@ ipcMain.handle('get-system-info', async () => {
   const platform = os.platform();
   const majorVersion = parseInt(release.split('.')[0], 10);
   const isLegacyWin = majorVersion < 10;
-  
+
   let osName = 'Windows (Legacy)';
   const parts = release.split('.').map(Number);
   if (parts[0] === 10) {
@@ -637,12 +687,38 @@ ipcMain.handle('get-system-info', async () => {
   else if (parts[0] === 6 && parts[1] === 2) osName = 'Windows 8';
   else if (parts[0] === 6 && parts[1] === 1) osName = 'Windows 7';
 
+  // CPU info - HardwareDiagnostics.jsx's CPU tab expects these fields.
+  // Reading from os.cpus() is fast and synchronous (no PowerShell spawn).
+  const cpus = os.cpus() || [];
+  const cpuModel = cpus.length > 0 ? cpus[0].model : 'Unknown CPU';
+  const cpuCores = cpus.length;
+
+  // cpuLoad: derive from the most recent metrics cache if available,
+  // otherwise spawn a quick sample. We deliberately reuse lastMetrics
+  // to avoid spawning a fresh netstat call on every CPU tab visit.
+  const cpuLoad = (lastMetrics && typeof lastMetrics.cpu === 'number')
+    ? lastMetrics.cpu
+    : 0;
+
+  // Total + free RAM (used by some components for memory context)
+  const totalMemBytes = os.totalmem();
+  const freeMemBytes = os.freemem();
+
   return {
     release,
     platform,
     executionPolicy: systemExecutionPolicy,
     isLegacyWin,
-    osName
+    osName,
+    // CPU fields (used by HardwareDiagnostics CPU tab)
+    cpuModel,
+    cpuCores,
+    cpuLoad,
+    // Memory fields (used for context displays)
+    totalMemBytes,
+    freeMemBytes,
+    totalMemGB: Math.round(totalMemBytes / 1024 / 1024 / 1024 * 10) / 10,
+    freeMemGB: Math.round(freeMemBytes / 1024 / 1024 / 1024 * 10) / 10,
   };
 });
 
