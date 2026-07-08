@@ -223,6 +223,46 @@ async function executeAllowedCommand(commandKey, rawArgs, options = {}) {
 const VALID_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 const ALLOWED_COMMANDS = {
+  'run-quick-cmd': {
+    type: 'powershell',
+    timeout: 120000,
+    streamChannel: 'care-out',
+    buildCommand: ([action]) => {
+      const presets = {
+        'flush-dns': 'ipconfig /flushdns',
+        'winsock-reset': 'netsh winsock reset',
+        'gpupdate': 'gpupdate /force',
+        'system-info': 'systeminfo',
+        'task-list': 'tasklist',
+        'chkdsk': 'chkdsk /scan',
+        'print-spooler-reset': 'Stop-Service -Name Spooler -Force; Remove-Item -Path "$env:windir\\System32\\spool\\PRINTERS\\*.*" -Force -Recurse; Start-Service -Name Spooler',
+        'wmi-rebuild': 'net stop winmgmt /y; winmgmt /resetrepository; net start winmgmt',
+        'wu-cache-clear': 'Stop-Service wuauserv, cryptSvc, bits, msiserver -Force; Remove-Item -Path "$env:windir\\SoftwareDistribution\\Download\\*" -Recurse -Force -ErrorAction SilentlyContinue; Start-Service wuauserv, cryptSvc, bits, msiserver',
+        're-register-apps': 'Get-AppXPackage -AllUsers | Foreach {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\\AppXManifest.xml" -ErrorAction SilentlyContinue}',
+        'battery-report': 'powercfg /batteryreport /output "$env:USERPROFILE\\Desktop\\battery_report.html"; Write-Output "Battery report saved to Desktop as battery_report.html"',
+        'clean-temp': 'Remove-Item -Path "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path "$env:windir\\Temp\\*" -Recurse -Force -ErrorAction SilentlyContinue; Write-Output "Temporary files cleared successfully."',
+        'netstat': 'netstat -ano',
+        'system-uptime': 'Write-Output "System Uptime:"; (Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime'
+      };
+      if (!presets[action]) throw new Error('Invalid quick command action');
+      return presets[action];
+    }
+  },
+  'get-device-details': {
+    type: 'powershell',
+    timeout: 30000,
+    command: `$os = Get-ComputerInfo | Select-Object CsName, OsName, OsVersion, OsArchitecture, WindowsVersion
+$cpu = Get-WmiObject Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors | Select -First 1
+$ram = Get-WmiObject Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum | Select-Object @{Name="TotalRAM_GB"; Expression={[math]::round($_.Sum / 1GB, 2)}}
+$storage = @(Get-WmiObject Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID, VolumeName, @{Name="Size_GB";Expression={[math]::Round($_.Size/1GB,2)}}, @{Name="FreeSpace_GB";Expression={[math]::Round($_.FreeSpace/1GB,2)}})
+$gpu = @(Get-WmiObject Win32_VideoController | Select-Object Name, DriverVersion, @{Name="VRAM_GB";Expression={[math]::Round($_.AdapterRAM/1GB,2)}})
+@{ OS = $os; CPU = $cpu; RAM = $ram.TotalRAM_GB; Storage = $storage; GPU = $gpu } | ConvertTo-Json -Depth 4 -Compress`
+  },
+  'get-installed-software': {
+    type: 'powershell',
+    timeout: 60000,
+    command: 'Get-ItemProperty HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*, HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*, HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* | Select-Object DisplayName, DisplayVersion, Publisher | Where-Object { $_.DisplayName -ne $null } | Sort-Object DisplayName -Unique | ConvertTo-Json -Compress'
+  },
   'scan-drivers': {
     type: 'script',
     script: 'scan_drivers.ps1',

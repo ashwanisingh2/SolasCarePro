@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Wrench, MonitorCheck, Cpu, CircuitBoard, Package, Globe,
   Sparkles, Settings2, Database, Info, Activity, Bot, LifeBuoy, Zap, Settings,
   Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope, Brain, FileText,
-  Trash2, Scissors, Copy, FileX, Unlock, Clock, Wifi, Shield, ClipboardList, Loader2
+  Trash2, Scissors, Copy, FileX, Unlock, Clock, Wifi, Shield, ClipboardList, Loader2, Terminal
 } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -11,6 +11,7 @@ const UnifiedDashboard = React.lazy(() => import('./components/UnifiedDashboard'
 const PerformanceTuning = React.lazy(() => import('./components/PerformanceTuning'));
 const DriverManager = React.lazy(() => import('./components/DriverManager'));
 const HardwareDiagnostics = React.lazy(() => import('./components/HardwareDiagnostics'));
+const DeviceDetails = React.lazy(() => import('./components/DeviceDetails'));
 const SoftwareUpdater = React.lazy(() => import('./components/SoftwareUpdater'));
 const BrowserRepair = React.lazy(() => import('./components/BrowserRepair'));
 const ServiceManager = React.lazy(() => import('./components/ServiceManager'));
@@ -21,7 +22,6 @@ const ReportCenter = React.lazy(() => import('./components/ReportCenter'));
 const StartupManager = React.lazy(() => import('./components/StartupManager'));
 const NetworkMonitor = React.lazy(() => import('./components/NetworkMonitor'));
 const PrivacyCleaner = React.lazy(() => import('./components/PrivacyCleaner'));
-const LargeFileFinder = React.lazy(() => import('./components/LargeFileFinder'));
 const HistoryLogs = React.lazy(() => import('./components/HistoryLogs'));
 
 // Advanced Tools
@@ -30,6 +30,7 @@ const FileShredder = React.lazy(() => import('./components/FileShredder'));
 const FileUnlocker = React.lazy(() => import('./components/FileUnlocker'));
 const DuplicateFinder = React.lazy(() => import('./components/DuplicateFinder'));
 const BrokenShortcuts = React.lazy(() => import('./components/BrokenShortcuts'));
+const CommandHub = React.lazy(() => import('./components/CommandHub'));
 const HostsEditor = React.lazy(() => import('./components/HostsEditor'));
 const Onboarding = React.lazy(() => import('./components/Onboarding'));
 
@@ -124,6 +125,7 @@ export default function App() {
     { isHeader: true, label: 'Core Tools' },
     { id: 'driver',         label: 'Drivers',            icon: Cpu,              component: DriverManager },
     { id: 'hardware',       label: 'Hardware Diagnostics', icon: CircuitBoard,   component: HardwareDiagnostics },
+    { id: 'device-details', label: 'Device Details',     icon: Info,             component: DeviceDetails },
     { id: 'performance',    label: 'Performance Tuning', icon: Zap,              component: PerformanceTuning },
     { id: 'software',       label: 'Software Updater',   icon: Package,          component: SoftwareUpdater },
     
@@ -135,7 +137,6 @@ export default function App() {
     
     { isHeader: true, label: 'Cleanup & Privacy' },
     { id: 'privacy',        label: 'Privacy Cleaner',    icon: Shield,           component: PrivacyCleaner },
-    { id: 'largefiles',     label: 'Large Files',        icon: Trash2,           component: LargeFileFinder },
     { id: 'browser',        label: 'Browser Repair',     icon: Globe,            component: BrowserRepair },
     { id: 'hosts-editor',   label: 'Hosts Ad-Blocker',   icon: ShieldAlert,      component: HostsEditor },
 
@@ -145,6 +146,7 @@ export default function App() {
     { id: 'settings',       label: 'Settings',           icon: Settings,         component: SettingsView },
 
     { isHeader: true, label: 'Extra Tools' },
+    { id: 'command-hub',       label: 'Command Hub',       icon: Terminal,       component: CommandHub },
     { id: 'force-uninstaller', label: 'Force Uninstaller', icon: Trash2,         component: ForceUninstaller },
     { id: 'file-shredder',     label: 'File Shredder',     icon: Scissors,       component: FileShredder },
     { id: 'file-unlocker',     label: 'File Unlocker',     icon: Unlock,         component: FileUnlocker },
@@ -191,7 +193,7 @@ export default function App() {
               </div>
             </div>
             <span className="bg-brand-violet text-white px-2 py-0.5 rounded text-[10px] font-black">
-              v4.3.0
+              v4.4.0
             </span>
           </div>
 
