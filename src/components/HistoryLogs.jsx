@@ -31,7 +31,22 @@ export default function HistoryLogs() {
           const lines = result.stdout.trim().split('\n').filter(Boolean);
           const parsed = lines.map((line, idx) => {
             try {
-              return { ...JSON.parse(line), id: idx };
+              const entry = JSON.parse(line);
+              // Normalize unified audit schema (ts/user/action/target/result/details/script)
+              // into the shape the UI expects (timestamp/result uppercase).
+              return {
+                id: idx,
+                timestamp: entry.ts || entry.timestamp || '',
+                user: entry.user || 'System',
+                action: entry.action || 'Unknown',
+                target: entry.target || '',
+                // Unified schema uses lowercase 'success'/'failure'; UI expects uppercase.
+                // Normalize both for backwards compat with old audit.log entries.
+                result: (entry.result || 'INFO').toUpperCase(),
+                error: entry.error || (entry.result === 'failure' ? entry.details : null),
+                details: entry.details || '',
+                script: entry.script || '',
+              };
             } catch {
               return { timestamp: '', action: 'System Log', result: 'INFO', error: line, id: idx };
             }

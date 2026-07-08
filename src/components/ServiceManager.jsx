@@ -21,9 +21,14 @@ export default function ServiceManager() {
       if (window.api) {
         const res = await window.api.runSystemCommand('list-services');
         if (res.success && res.stdout) {
-          const parsed = JSON.parse(res.stdout.trim());
+          let parsed = null;
+          try { parsed = JSON.parse(res.stdout.trim()); }
+          catch {
+            const m = res.stdout.match(/\[[\s\S]*\]/) || res.stdout.match(/\{[\s\S]*\}/);
+            if (m) { try { parsed = JSON.parse(m[0]); } catch {} }
+          }
           // The new service_repair.ps1 wraps results under `data` - handle both shapes.
-          const list = Array.isArray(parsed) ? parsed : (parsed.data || []);
+          const list = Array.isArray(parsed) ? parsed : (parsed?.data || []);
           setServices(list);
         } else {
           setServices([]);

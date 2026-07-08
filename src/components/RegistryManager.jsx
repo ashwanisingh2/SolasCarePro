@@ -17,7 +17,13 @@ export default function RegistryManager() {
       if (window.api) {
         const res = await window.api.runSystemCommand('registry-list-backups');
         if (res.success && res.stdout) {
-          setBackups(JSON.parse(res.stdout.trim()));
+          let backups = null;
+          try { backups = JSON.parse(res.stdout.trim()); }
+          catch {
+            const m = res.stdout.match(/\[[\s\S]*\]/) || res.stdout.match(/\{[\s\S]*\}/);
+            if (m) { try { backups = JSON.parse(m[0]); } catch {} }
+          }
+          setBackups(Array.isArray(backups) ? backups : (backups ? [backups] : []));
         } else {
           setBackups([]);
         }

@@ -31,11 +31,18 @@ export default function LargeFileFinder() {
       try {
         const res = await window.api.runSystemCommand('get-drives-info');
         if (res.success && res.stdout) {
-          const driveData = JSON.parse(res.stdout);
-          const driveList = Array.isArray(driveData) ? driveData : [driveData];
-          if (driveList.length > 0) {
-            setDrives(driveList);
-            setSelectedDrive(driveList[0].DriveLetter);
+          let driveData = null;
+          try { driveData = JSON.parse(res.stdout.trim()); }
+          catch {
+            const m = res.stdout.match(/\[[\s\S]*\]/) || res.stdout.match(/\{[\s\S]*\}/);
+            if (m) { try { driveData = JSON.parse(m[0]); } catch {} }
+          }
+          if (driveData) {
+            const driveList = Array.isArray(driveData) ? driveData : [driveData];
+            if (driveList.length > 0) {
+              setDrives(driveList);
+              setSelectedDrive(driveList[0].DriveLetter);
+            }
           }
         }
       } catch (err) {
@@ -55,17 +62,26 @@ export default function LargeFileFinder() {
       if (window.api) {
         const res = await window.api.runSystemCommand('scan-large-files', [minSize, selectedDrive]);
         if (res.success && res.stdout) {
-          const files = JSON.parse(res.stdout.trim());
-          const fileList = Array.isArray(files) ? files : [files];
-          // Casing in PowerShell: FullName, Size, LastWriteTime
-          setLargeFiles(fileList.map((f, i) => ({
-            id: i,
-            path: f.FullName,
-            size: f.Size,
-            modified: f.LastWriteTime ? new Date(f.LastWriteTime).toLocaleDateString() : 'N/A',
-            type: f.FullName.split('.').pop().toUpperCase() || 'File'
-          })));
-          setStatusMessage(`Scan complete. Found ${fileList.length} files.`);
+          let files = null;
+          try { files = JSON.parse(res.stdout.trim()); }
+          catch {
+            const m = res.stdout.match(/\[[\s\S]*\]/) || res.stdout.match(/\{[\s\S]*\}/);
+            if (m) { try { files = JSON.parse(m[0]); } catch {} }
+          }
+          if (files) {
+            const fileList = Array.isArray(files) ? files : [files];
+            // Casing in PowerShell: FullName, Size, LastWriteTime
+            setLargeFiles(fileList.map((f, i) => ({
+              id: i,
+              path: f.FullName,
+              size: f.Size,
+              modified: f.LastWriteTime ? new Date(f.LastWriteTime).toLocaleDateString() : 'N/A',
+              type: f.FullName.split('.').pop().toUpperCase() || 'File'
+            })));
+            setStatusMessage(`Scan complete. Found ${fileList.length} files.`);
+          } else {
+            setStatusMessage('Scan complete but could not parse output.');
+          }
         } else {
           setStatusMessage(res.error || 'Scan finished with no matches.');
         }
