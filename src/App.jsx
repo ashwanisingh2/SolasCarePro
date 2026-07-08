@@ -3,45 +3,61 @@ import {
   LayoutDashboard, Wrench, MonitorCheck, Cpu, CircuitBoard, Package, Globe,
   Sparkles, Settings2, Database, Info, Activity, Bot, LifeBuoy, Zap, Settings,
   Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope, Brain, FileText,
-  Trash2, Scissors, Copy, FileX, Unlock
+  Trash2, Scissors, Copy, FileX, Unlock, Clock, Wifi, Shield, ClipboardList, Loader2
 } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
 
-const OneClickDashboard = React.lazy(() => import('./components/RepairDashboard'));
-const SmartRepair = React.lazy(() => import('./components/SmartRepair'));
+const UnifiedDashboard = React.lazy(() => import('./components/UnifiedDashboard'));
+const PerformanceTuning = React.lazy(() => import('./components/PerformanceTuning'));
 const DriverManager = React.lazy(() => import('./components/DriverManager'));
-const PowerFeatures = React.lazy(() => import('./components/PowerFeatures'));
 const HardwareDiagnostics = React.lazy(() => import('./components/HardwareDiagnostics'));
 const SoftwareUpdater = React.lazy(() => import('./components/SoftwareUpdater'));
 const BrowserRepair = React.lazy(() => import('./components/BrowserRepair'));
-const MaintenanceHub = React.lazy(() => import('./components/MaintenanceHub'));
 const ServiceManager = React.lazy(() => import('./components/ServiceManager'));
 const RegistryManager = React.lazy(() => import('./components/RegistryManager'));
 const SettingsView = React.lazy(() => import('./components/Settings'));
-const AIDiagnostics = React.lazy(() => import('./components/AIDiagnostics'));
 const ReportCenter = React.lazy(() => import('./components/ReportCenter'));
 
-// Advanced Tools (PROMPT batch)
+const StartupManager = React.lazy(() => import('./components/StartupManager'));
+const NetworkMonitor = React.lazy(() => import('./components/NetworkMonitor'));
+const PrivacyCleaner = React.lazy(() => import('./components/PrivacyCleaner'));
+const LargeFileFinder = React.lazy(() => import('./components/LargeFileFinder'));
+const HistoryLogs = React.lazy(() => import('./components/HistoryLogs'));
+
+// Advanced Tools
 const ForceUninstaller = React.lazy(() => import('./components/ForceUninstaller'));
 const FileShredder = React.lazy(() => import('./components/FileShredder'));
 const FileUnlocker = React.lazy(() => import('./components/FileUnlocker'));
-const DriverSweeper = React.lazy(() => import('./components/DriverSweeper'));
 const DuplicateFinder = React.lazy(() => import('./components/DuplicateFinder'));
 const BrokenShortcuts = React.lazy(() => import('./components/BrokenShortcuts'));
 const HostsEditor = React.lazy(() => import('./components/HostsEditor'));
+const Onboarding = React.lazy(() => import('./components/Onboarding'));
 
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [powerSubTab, setPowerSubTab] = useState('performance');
   const [isAdmin, setIsAdmin] = useState(false);
   const [systemInfo, setSystemInfo] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [theme, setTheme] = useState('dark');
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isWindowActive, setIsWindowActive] = useState(true);
   const [visitedTabs, setVisitedTabs] = useState(['dashboard']);
 
-  // Load persistence theme on mount (FIX 6)
+  // Load persistence theme and startup init
   useEffect(() => {
+    // Check onboarding status
+    if (!localStorage.getItem('solas_onboarded')) {
+      setShowOnboarding(true);
+    }
+
+    // Handle visibility for battery/CPU saving during polling
+    const handleVisibilityChange = () => {
+      setIsWindowActive(document.visibilityState === 'visible');
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     const initAppAndTheme = async () => {
       try {
         if (window.api) {
@@ -64,9 +80,13 @@ export default function App() {
       }
     };
     initAppAndTheme();
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
-  // Sync theme changes with DOM and Electron SettingsStore (FIX 6)
+  // Sync theme changes with DOM and Electron SettingsStore
   const handleSetTheme = async (newTheme) => {
     setTheme(newTheme);
     if (window.api) {
@@ -92,65 +112,64 @@ export default function App() {
     }
   }, [activeTab]);
 
-  // Deep linking and routing mapper
   const handleSetActiveTab = (tabId) => {
-    if (tabId === 'drivers' || tabId === 'driver') {
-      setActiveTab('driver');
-    } else if (tabId === 'power') {
-      setActiveTab('power');
-      setPowerSubTab('performance');
-    } else if (['performance', 'battery', 'ultimate', 'coreparking', 'faststartup',
-                'advancedtweaks', 'network', 'privacy', 'startup', 'largefiles', 'history'
-               ].includes(tabId)) {
-      // Power Features hosts these as subtabs; clicking them opens Power Features
-      // with the requested sub-tab active.
-      setActiveTab('power');
-      setPowerSubTab(tabId);
-    } else {
-      setActiveTab(tabId);
-    }
+    setActiveTab(tabId);
   };
 
-  // Removed duplicates from sidebar to keep the tool clean and professional
+  // Refactored navigation to be much cleaner and categorized accurately
   const navigation = [
+    { isHeader: true, label: 'Main' },
+    { id: 'dashboard',      label: 'Unified Dashboard',  icon: LayoutDashboard,  component: UnifiedDashboard },
+    
     { isHeader: true, label: 'Core Tools' },
-    { id: 'dashboard',      label: 'Dashboard',          icon: LayoutDashboard,  component: OneClickDashboard },
-    { id: 'ai-diagnostics', label: 'Smart Diagnostics', icon: Brain,            component: AIDiagnostics },
-    { id: 'smart-repair',   label: 'Smart Repair',       icon: Stethoscope,      component: SmartRepair },
-    { isHeader: true, label: 'Utilities' },
     { id: 'driver',         label: 'Drivers',            icon: Cpu,              component: DriverManager },
-    { id: 'power',          label: 'Power Features',     icon: Zap,              component: PowerFeatures },
-    { id: 'hardware',       label: 'Hardware',           icon: CircuitBoard,     component: HardwareDiagnostics },
-    { id: 'software',       label: 'Software',           icon: Package,          component: SoftwareUpdater },
-    { id: 'maintenance',    label: 'Maintenance',        icon: Sparkles,         component: MaintenanceHub },
-    { id: 'report-center',  label: 'Report Center',      icon: FileText,         component: ReportCenter },
-    { isHeader: true, label: 'Network Tools' },
-    { id: 'browser',        label: 'Browser Repair',     icon: Globe,            component: BrowserRepair },
-    { isHeader: true, label: 'Security Tools' },
-    { id: 'services',       label: 'Services',           icon: Settings2,        component: ServiceManager },
+    { id: 'hardware',       label: 'Hardware Diagnostics', icon: CircuitBoard,   component: HardwareDiagnostics },
+    { id: 'performance',    label: 'Performance Tuning', icon: Zap,              component: PerformanceTuning },
+    { id: 'software',       label: 'Software Updater',   icon: Package,          component: SoftwareUpdater },
+    
+    { isHeader: true, label: 'System Tools' },
     { id: 'registry',       label: 'Registry',           icon: Database,         component: RegistryManager },
-    { isHeader: true, label: 'System' },
+    { id: 'services',       label: 'Services',           icon: Settings2,        component: ServiceManager },
+    { id: 'startup',        label: 'Startup Manager',    icon: Clock,            component: StartupManager },
+    { id: 'network',        label: 'Network Monitor',    icon: Wifi,             component: NetworkMonitor },
+    
+    { isHeader: true, label: 'Cleanup & Privacy' },
+    { id: 'privacy',        label: 'Privacy Cleaner',    icon: Shield,           component: PrivacyCleaner },
+    { id: 'largefiles',     label: 'Large Files',        icon: Trash2,           component: LargeFileFinder },
+    { id: 'browser',        label: 'Browser Repair',     icon: Globe,            component: BrowserRepair },
+    { id: 'hosts-editor',   label: 'Hosts Ad-Blocker',   icon: ShieldAlert,      component: HostsEditor },
+
+    { isHeader: true, label: 'Logs & Settings' },
+    { id: 'history',        label: 'Repair History',     icon: ClipboardList,    component: HistoryLogs },
+    { id: 'report-center',  label: 'Report Center',      icon: FileText,         component: ReportCenter },
     { id: 'settings',       label: 'Settings',           icon: Settings,         component: SettingsView },
-    { isHeader: true, label: 'Advanced Tools' },
+
+    { isHeader: true, label: 'Extra Tools' },
     { id: 'force-uninstaller', label: 'Force Uninstaller', icon: Trash2,         component: ForceUninstaller },
     { id: 'file-shredder',     label: 'File Shredder',     icon: Scissors,       component: FileShredder },
     { id: 'file-unlocker',     label: 'File Unlocker',     icon: Unlock,         component: FileUnlocker },
-    { id: 'driver-sweeper',    label: 'Driver Sweeper',    icon: Trash2,         component: DriverSweeper },
     { id: 'duplicate-finder',  label: 'Duplicate Finder',  icon: Copy,           component: DuplicateFinder },
     { id: 'broken-shortcuts',  label: 'Broken Shortcuts',  icon: FileX,          component: BrokenShortcuts },
-    { id: 'hosts-editor',      label: 'Hosts Ad-Blocker',  icon: ShieldAlert,    component: HostsEditor },
   ];
 
   const getBreadcrumb = () => {
     const item = navigation.find(n => n.id === activeTab);
-    return item ? item.label : 'Power Features';
+    return item ? item.label : 'Home';
   };
 
   if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-brand-navy">
-        <RefreshCw className="h-8 w-8 animate-spin text-brand-violet" />
+        <Loader2 className="h-12 w-12 animate-spin text-brand-violet" />
       </div>
+    );
+  }
+
+  if (showOnboarding) {
+    return (
+      <React.Suspense fallback={<div className="bg-brand-navy w-full h-screen"></div>}>
+        <Onboarding onComplete={() => setShowOnboarding(false)} />
+      </React.Suspense>
     );
   }
 
@@ -164,13 +183,15 @@ export default function App() {
           <div className="flex items-center gap-3 px-1 md:px-2 py-4 mb-6">
             <Zap className="h-8 w-8 text-brand-violet animate-pulse shrink-0" />
             <div className="hidden md:block">
-              <h1 className="text-lg font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-brand-violet to-brand-cyan">
-                SOLAS CARE PRO
-              </h1>
-              <p className="text-[10px] text-slate-400 font-medium">Windows Repair Center</p>
+              <div className="flex flex-col">
+                <span className="font-black text-xl tracking-widest text-white drop-shadow-md">
+                  SOLASCARE PRO
+                </span>
+                <span className="text-[10px] text-brand-violet uppercase font-bold tracking-widest"> Repair Center</span>
+              </div>
             </div>
             <span className="bg-brand-violet text-white px-2 py-0.5 rounded text-[10px] font-black">
-              v4.2.2
+              v4.3.0
             </span>
           </div>
 
@@ -191,6 +212,7 @@ export default function App() {
                   key={item.id}
                   onClick={() => handleSetActiveTab(item.id)}
                   title={item.label}
+                  aria-label={`Navigate to ${item.label}`}
                   className={`w-full flex items-center justify-center md:justify-start gap-3 px-3 md:px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
                     isActive 
                       ? 'bg-gradient-to-r from-brand-violet/20 to-brand-cyan/10 border-l-4 border-brand-violet text-white shadow-md' 
@@ -207,16 +229,7 @@ export default function App() {
 
         {/* Footer Area with Privilege Badge */}
         <div className="border-t border-brand-border pt-4 space-y-3">
-          {/* Theme Toggle */}
-          <button
-            onClick={() => handleSetTheme(theme === 'dark' ? 'light' : 'dark')}
-            title={theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'}
-            className="w-full flex items-center justify-center md:justify-start gap-3 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all cursor-pointer"
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
-            <span className="hidden md:inline">{theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'}</span>
-          </button>
-          <div className={`flex items-center justify-center md:justify-start gap-3 px-3 py-2 rounded-lg ${isAdmin ? 'bg-emerald-950/30 border border-emerald-500/20' : 'bg-rose-950/30 border border-rose-500/20'}`}>
+          <div className={`flex items-center justify-center md:justify-start gap-3 px-3 py-2 rounded-lg ${isAdmin ? 'bg-emerald-950/30 border border-emerald-500/20' : 'bg-rose-950/30 border border-rose-500/20'}`} role="status" aria-label={isAdmin ? 'Running in Admin Mode' : 'Running in Standard Mode'}>
             {isAdmin ? (
               <ShieldCheck className="h-5 w-5 text-brand-success shrink-0" />
             ) : (
@@ -228,8 +241,10 @@ export default function App() {
                 {isAdmin ? 'Admin Mode' : 'Standard'}
               </p>
             </div>
+            </div>
+            <div className="mt-auto px-4 pb-6">
+            <p className="hidden md:block text-[10px] text-slate-500 text-center mt-3 font-medium">SolasCare Pro v4.3.0</p>
           </div>
-          <p className="hidden md:block text-[10px] text-slate-500 text-center mt-3 font-medium">Solas Care Pro v4.2.2</p>
         </div>
       </aside>
 
@@ -244,14 +259,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* Compatibility Mode Banner for Win 7/8 */}
-        {systemInfo?.isLegacyWin && (
-          <div className="bg-amber-950/40 border-b border-amber-500/20 text-amber-400 px-6 py-2.5 text-xs font-semibold flex items-center gap-2 select-none text-left shrink-0">
-            <ShieldAlert className="h-4 w-4 shrink-0 text-amber-500 animate-pulse" />
-            <span>Compatibility Mode: Limited features active on {systemInfo.osName || 'Windows Legacy'}. Winget and modern disk optimization are disabled.</span>
-          </div>
-        )}
-
         {/* Body View Host with state-preserving tabs visibility toggling */}
         <div className="flex-1 overflow-y-auto bg-gradient-to-b from-brand-navy via-slate-900 to-brand-navy transition-colors duration-300 relative">
           <React.Suspense fallback={
@@ -259,7 +266,7 @@ export default function App() {
               <RefreshCw className="h-6 w-6 animate-spin text-brand-violet" />
             </div>
           }>
-            {navigation.map((item) => {
+            {navigation.filter(item => !item.isHeader).map((item) => {
               const Component = item.component;
               const isVisited = visitedTabs.includes(item.id);
               const isActive = activeTab === item.id;
@@ -270,11 +277,11 @@ export default function App() {
                   className={isActive ? "h-full w-full" : "hidden"}
                 >
                   {item.id === 'dashboard' ? (
-                    <Component setActiveTab={handleSetActiveTab} />
+                    <Component setActiveTab={handleSetActiveTab} isWindowActive={isWindowActive} />
+                  ) : item.id === 'network' ? (
+                    <Component isWindowActive={isWindowActive} />
                   ) : item.id === 'settings' ? (
                     <Component theme={theme} setTheme={handleSetTheme} />
-                  ) : item.id === 'power' ? (
-                    <Component activeSubTab={powerSubTab} setActiveSubTab={handleSetActiveTab} />
                   ) : (
                     <Component />
                   )}

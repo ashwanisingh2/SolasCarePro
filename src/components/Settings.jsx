@@ -9,6 +9,8 @@ export default function SettingsView({ theme, setTheme }) {
   const [channel, setChannel] = useState('stable');
   const [logLevel, setLogLevel] = useState('info');
   const [runAtStartup, setRunAtStartup] = useState(false);
+  const [optInAnalytics, setOptInAnalytics] = useState(false);
+  const [optInCrashReports, setOptInCrashReports] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [systemInfo, setSystemInfo] = useState(null);
 
@@ -18,9 +20,13 @@ export default function SettingsView({ theme, setTheme }) {
         const c = await window.api.getSetting('channel', 'stable');
         const l = await window.api.getSetting('logLevel', 'info');
         const r = await window.api.getSetting('runAtStartup', false);
+        const oa = await window.api.getSetting('optInAnalytics', false);
+        const oc = await window.api.getSetting('optInCrashReports', false);
         setChannel(c);
         setLogLevel(l);
         setRunAtStartup(r);
+        setOptInAnalytics(oa);
+        setOptInCrashReports(oc);
 
         const info = await window.api.getSystemInfo();
         setSystemInfo(info);
@@ -153,27 +159,40 @@ export default function SettingsView({ theme, setTheme }) {
               <Globe className="h-4.5 w-4.5 text-brand-cyan" /> General Configuration
             </h3>
 
-            {/* Theme Toggle */}
+            {/* Opt-In Analytics */}
             <div className="flex justify-between items-center py-2.5 border-b border-brand-border/40">
               <div>
-                <h4 className="text-xs font-bold text-slate-200">Application Theme</h4>
-                <p className="text-[10px] text-slate-500 mt-0.5">Toggle interface design palettes</p>
+                <h4 className="text-xs font-bold text-slate-200">Usage Analytics</h4>
+                <p className="text-[10px] text-slate-500 mt-0.5">Allow local, anonymous usage tracking to help improve features</p>
               </div>
-              <div className="flex gap-2">
-                {['dark', 'light'].map(t => (
-                  <button
-                    key={t}
-                    onClick={() => updateSetting('theme', t, setTheme)}
-                    className={`px-3 py-1.5 text-[10px] font-bold rounded cursor-pointer capitalize border transition-all ${
-                      theme === t 
-                        ? 'bg-brand-violet/20 border-brand-violet text-white font-black' 
-                        : 'bg-slate-900 border-brand-border text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
+              <button
+                onClick={() => updateSetting('optInAnalytics', !optInAnalytics, setOptInAnalytics)}
+                className={`w-14 h-7 rounded-full p-1 transition-all duration-300 cursor-pointer ${
+                  optInAnalytics ? 'bg-emerald-600' : 'bg-slate-800'
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-all duration-300 ${
+                  optInAnalytics ? 'translate-x-7' : 'translate-x-0'
+                }`}></div>
+              </button>
+            </div>
+
+            {/* Opt-In Crash Reports */}
+            <div className="flex justify-between items-center py-2.5 border-b border-brand-border/40">
+              <div>
+                <h4 className="text-xs font-bold text-slate-200">Crash Telemetry</h4>
+                <p className="text-[10px] text-slate-500 mt-0.5">Send privacy-respecting trace logs if the app crashes</p>
               </div>
+              <button
+                onClick={() => updateSetting('optInCrashReports', !optInCrashReports, setOptInCrashReports)}
+                className={`w-14 h-7 rounded-full p-1 transition-all duration-300 cursor-pointer ${
+                  optInCrashReports ? 'bg-emerald-600' : 'bg-slate-800'
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-all duration-300 ${
+                  optInCrashReports ? 'translate-x-7' : 'translate-x-0'
+                }`}></div>
+              </button>
             </div>
 
             {/* Run on Startup */}

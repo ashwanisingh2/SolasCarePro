@@ -3,12 +3,12 @@
 # and provides intelligent recommendations. NEW - no equivalent existed.
 # This is NOT a neural network - it's a deterministic expert system that
 # mimics AI behavior through weighted rules + pattern matching.
-. (Join-Path $PSScriptRoot '_common.ps1')
-
 param(
     [ValidateSet('diagnose', 'recommend', 'predict', 'self-heal')]
     [string]$Action = 'diagnose'
 )
+
+. (Join-Path $PSScriptRoot '_common.ps1')
 
 $ErrorActionPreference = 'Stop'
 $timer = Start-Timer

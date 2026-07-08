@@ -50,7 +50,7 @@ export default function RegistryManager() {
     const label = backupName.trim() || 'Manual Registry Backup';
     try {
       if (window.api) {
-        const res = await window.api.runSystemCommand('registry-backup', [label]);
+        const res = await window.api.runSystemCommand('registry-backup', ['backup', label]);
         if (res.success) {
           addNotification('Registry Backup', 'Registry keys exported successfully.', 'success');
           setBackupName('');

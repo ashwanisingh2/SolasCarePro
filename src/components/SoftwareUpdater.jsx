@@ -68,7 +68,7 @@ export default function SoftwareUpdater() {
     const checkDns = async () => {
       if (window.api && window.api.getDnsStatus) {
         const res = await window.api.getDnsStatus();
-        setDnsStatus(res);
+        setDnsStatus(typeof res === 'string' ? res : (res?.status || 'Original'));
       }
     };
     checkDns();
@@ -383,16 +383,16 @@ export default function SoftwareUpdater() {
           </div>
           {/* DNS Status Badge */}
           <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border flex items-center gap-1.5 select-none ${
-            dnsStatus === 'Original' ? 'bg-emerald-950/40 border-emerald-500/20 text-brand-success' :
-            dnsStatus === 'Temporary (Google)' ? 'bg-amber-950/40 border-amber-500/20 text-amber-400 animate-pulse' :
+            (typeof dnsStatus === 'object' ? dnsStatus?.status : dnsStatus) === 'Original' ? 'bg-emerald-950/40 border-emerald-500/20 text-brand-success' :
+            (typeof dnsStatus === 'object' ? dnsStatus?.status : dnsStatus) === 'Temporary (Google)' ? 'bg-amber-950/40 border-amber-500/20 text-amber-400 animate-pulse' :
             'bg-blue-950/40 border-blue-500/20 text-blue-400'
           }`}>
             <span className={`h-1.5 w-1.5 rounded-full ${
-              dnsStatus === 'Original' ? 'bg-brand-success' :
-              dnsStatus === 'Temporary (Google)' ? 'bg-amber-400' :
+              (typeof dnsStatus === 'object' ? dnsStatus?.status : dnsStatus) === 'Original' ? 'bg-brand-success' :
+              (typeof dnsStatus === 'object' ? dnsStatus?.status : dnsStatus) === 'Temporary (Google)' ? 'bg-amber-400' :
               'bg-brand-cyan animate-ping'
             }`}></span>
-            DNS: {dnsStatus}
+            DNS: {typeof dnsStatus === 'object' ? (dnsStatus?.status || 'Original') : dnsStatus}
           </span>
         </div>
 

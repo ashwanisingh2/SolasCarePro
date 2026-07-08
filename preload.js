@@ -2,14 +2,14 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   isAdmin: () => ipcRenderer.invoke('is-admin'),
-  runSystemCommand: (commandKey, args = []) => {
+  runSystemCommand: (commandKey, args = [], options = {}) => {
     if (typeof commandKey !== 'string') {
       throw new Error('Invalid command key');
     }
     if (!Array.isArray(args)) {
       throw new Error('Command args must be an array');
     }
-    return ipcRenderer.invoke('run-system-command', commandKey, args);
+    return ipcRenderer.invoke('run-system-command', commandKey, args, options);
   },
   getSystemMetrics: () => ipcRenderer.invoke('get-system-metrics'),
   getSystemInfo: () => ipcRenderer.invoke('get-system-info'),

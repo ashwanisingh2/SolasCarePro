@@ -1,6 +1,6 @@
 {
   "name": "solas-care-pro",
-  "version": "4.2.2",
+  "version": "4.3.0",
   "description": "Professional-grade Advanced System Repair & Driver Management Suite",
   "main": "main.js",
   "scripts": {
@@ -8,7 +8,10 @@
     "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "vite build && electron-builder",
     "vite:build": "vite build",
-    "pack": "electron-builder --dir"
+    "pack": "electron-builder --dir",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
@@ -19,6 +22,9 @@
     "recharts": "^2.12.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.42.1",
+    "@testing-library/jest-dom": "^6.4.2",
+    "@testing-library/react": "^14.2.1",
     "@types/react": "^18.2.61",
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",
@@ -27,14 +33,18 @@
     "cross-env": "^7.0.3",
     "electron": "^29.4.6",
     "electron-builder": "^24.13.3",
+    "jsdom": "^24.0.0",
+    "playwright": "^1.61.1",
     "postcss": "^8.4.35",
+    "puppeteer": "^25.3.0",
     "tailwindcss": "^3.4.1",
     "vite": "^5.1.4",
+    "vitest": "^1.4.0",
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.solas.pcmaster",
-    "productName": "SolasPCMaster",
+    "appId": "com.solas.carepro",
+    "productName": "SolasCare Pro",
     "directories": {
       "output": "dist-electron"
     },
@@ -58,6 +68,9 @@
         "nsis"
       ],
       "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "include": "build/installer.nsh"
     }
   }
 }

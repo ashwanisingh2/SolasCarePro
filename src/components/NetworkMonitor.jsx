@@ -95,7 +95,16 @@ function LiveTrafficTab() {
       try {
         if (window.api) {
           const connTest = await window.api.runSystemCommand('detect-network');
-          if (active) setConnectionStatus(connTest.success && connTest.exitCode === 0 ? 'connected' : 'disconnected');
+          if (active) {
+            let connected = false;
+            try {
+              const parsed = JSON.parse(connTest.stdout);
+              connected = parsed.status === 'connected';
+            } catch (e) {
+              connected = connTest.success && connTest.exitCode === 0;
+            }
+            setConnectionStatus(connected ? 'connected' : 'disconnected');
+          }
         } else {
           if (active) setConnectionStatus('connected');
         }

@@ -6,6 +6,8 @@ import {
   Globe2, Server, Wifi, WifiOff, Lock
 } from 'lucide-react';
 import CommandOutput from './shared/CommandOutput';
+import { useNotification } from '../context/NotificationContext';
+import { useConfirm } from './shared/ConfirmModal';
 
 // =====================================================================
 // SolasCarePro DriverManager — Enterprise driver management module
@@ -26,6 +28,7 @@ const TABS = [
   { id: 'wu',        label: 'Windows Update',icon: Globe2 },
   { id: 'reports',   label: 'Reports',       icon: FileText },
   { id: 'remote',    label: 'Remote',        icon: Server },
+  { id: 'sweeper',   label: 'Sweeper',       icon: Trash2 },
 ];
 
 // ---------- Helpers ----------
@@ -452,7 +455,15 @@ export default function DriverManager() {
         )}
 
         {activeTab === 'install' && (
-          <InstallTab onStatus={setStatusMessage} onLog={setInstallLog} onRebootRequired={setRebootRequired} />
+          <InstallTab 
+            devices={devices}
+            scanning={scanning}
+            activeAction={activeAction}
+            onAction={executeDeviceAction}
+            onStatus={setStatusMessage} 
+            onLog={setInstallLog} 
+            onRebootRequired={setRebootRequired} 
+          />
         )}
 
         {activeTab === 'verify' && (
@@ -474,6 +485,10 @@ export default function DriverManager() {
 
         {activeTab === 'remote' && (
           <RemoteTab onStatus={setStatusMessage} onRebootRequired={setRebootRequired} />
+        )}
+        
+        {activeTab === 'sweeper' && (
+          <DriverSweeperTab />
         )}
       </section>
 
@@ -952,7 +967,10 @@ function BackupTab({ backups, onRefresh, onStatus, onRebootRequired }) {
 // =====================================================================
 // Sub-tab: Install
 // =====================================================================
-function InstallTab({ onStatus, onLog, onRebootRequired }) {
+function InstallTab({ devices = [], scanning, activeAction, onAction, onStatus, onLog, onRebootRequired }) {
+  const missingDrivers = devices.filter(d => d.Status === 'Missing' || d.Status === 'Error' || d.Status === 'Warning');
+  const installedDrivers = devices.filter(d => d.Status === 'OK');
+
   const [infPath, setInfPath] = useState('');
   const [folderPath, setFolderPath] = useState('');
   const [storeDrivers, setStoreDrivers] = useState([]);
@@ -1030,11 +1048,64 @@ function InstallTab({ onStatus, onLog, onRebootRequired }) {
   return (
     <div className="space-y-5 text-left">
       <div>
-        <h3 className="text-sm font-bold text-slate-200">Driver Install / Uninstall</h3>
-        <p className="text-xs text-slate-400 mt-0.5">PnPUtil-based driver store management. All operations are logged with exit codes + reboot detection.</p>
+        <h3 className="text-sm font-bold text-slate-200">Software Updater & Driver Install</h3>
+        <p className="text-xs text-slate-400 mt-0.5">Manage missing/installed drivers, or manually install INFs via PnPUtil.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Updater View */}
+      <div className="bg-slate-950/40 border border-brand-border rounded-lg p-4 space-y-4">
+        <h4 className="text-xs font-bold text-slate-400 uppercase flex items-center gap-2">
+          <Activity className="h-4 w-4 text-brand-violet" />
+          System Drivers Status
+        </h4>
+
+        {scanning ? (
+          <div className="py-8 flex flex-col items-center gap-3">
+            <RefreshCw className="h-6 w-6 animate-spin text-brand-violet" />
+            <p className="text-xs text-slate-400">Scanning system devices...</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Missing Drivers */}
+            <div>
+              <h5 className="text-[11px] font-bold text-rose-400 uppercase mb-2 flex items-center gap-1">
+                <AlertTriangle className="h-3.5 w-3.5" /> Missing / Issues ({missingDrivers.length})
+              </h5>
+              {missingDrivers.length === 0 ? (
+                <div className="text-xs text-slate-500 bg-slate-900/50 p-3 rounded border border-brand-border/50">
+                  No missing drivers found. System is healthy.
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {missingDrivers.map((d, i) => (
+                    <DriverRow key={i} device={d} isOp={activeAction?.id === d.PnpDeviceId} action={activeAction?.action} onAction={onAction} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Installed Drivers */}
+            <div>
+              <h5 className="text-[11px] font-bold text-emerald-400 uppercase mb-2 flex items-center gap-1">
+                <CheckCircle className="h-3.5 w-3.5" /> Installed ({installedDrivers.length})
+              </h5>
+              {installedDrivers.length === 0 ? (
+                <div className="text-xs text-slate-500 bg-slate-900/50 p-3 rounded border border-brand-border/50">
+                  No installed devices detected yet.
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {installedDrivers.map((d, i) => (
+                    <DriverRow key={i} device={d} isOp={activeAction?.id === d.PnpDeviceId} action={activeAction?.action} onAction={onAction} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
         {/* Install single INF */}
         <div className="bg-slate-950/40 border border-brand-border rounded-lg p-4 space-y-2">
           <label className="block text-[10px] font-bold text-slate-500 uppercase">Install Single INF</label>
@@ -1121,6 +1192,32 @@ function InstallTab({ onStatus, onLog, onRebootRequired }) {
             <Trash2 className="h-3.5 w-3.5 inline" /> Force Remove
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DriverRow({ device, isOp, action, onAction }) {
+  const isMissing = device.Status !== 'OK' && device.Status !== 'Disabled';
+  return (
+    <div className="flex items-center justify-between p-2 rounded bg-slate-900/50 border border-brand-border/50 hover:bg-slate-800/50 transition-colors">
+      <div className="min-w-0 flex-1 pr-3">
+        <div className="font-bold text-slate-200 text-xs truncate" title={device.DeviceName}>{device.DeviceName || 'Unknown Device'}</div>
+        <div className="text-[10px] text-slate-500 truncate mt-0.5">
+          {device.Manufacturer || device.DriverProvider || 'Unknown Publisher'} &middot; {device.DriverVersion || 'No Version'}
+        </div>
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        <StatusBadge status={device.Status} isOperating={isOp} action={action} />
+        {isMissing && onAction && (
+          <button
+            disabled={isOp}
+            onClick={() => onAction(device, 'update')}
+            className="px-2 py-1 bg-brand-violet hover:bg-brand-violet/90 disabled:opacity-50 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer"
+          >
+            <ArrowUpCircle className="h-3 w-3" /> Update
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1600,6 +1697,159 @@ function RemoteTab({ onStatus, onRebootRequired }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function DriverSweeperTab() {
+  const { addNotification } = useNotification();
+  const confirm = useConfirm();
+  const [drivers, setDrivers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [removing, setRemoving] = useState(null);
+  const [search, setSearch] = useState('');
+
+  const fetchDrivers = async () => {
+    setLoading(true);
+    try {
+      if (window.api) {
+        const res = await window.api.runSystemCommand('driver-install', ['list-store']);
+        const m = res.stdout?.match(/===RESULT===\s*(\{[\s\S]*\})/);
+        if (m) {
+          const obj = JSON.parse(m[1]);
+          const thirdParty = (obj.drivers || []).filter(d =>
+            !(d.Signer || '').match(/Microsoft/i) &&
+            !(d.Provider || '').match(/Microsoft/i)
+          );
+          setDrivers(thirdParty);
+          addNotification('Driver Sweeper', `Loaded ${thirdParty.length} third-party driver(s) (excluded ${obj.drivers.length - thirdParty.length} Microsoft).`, 'info');
+        } else {
+          setDrivers([]);
+        }
+      } else {
+        await new Promise(r => setTimeout(r, 500));
+        setDrivers([
+          { PublishedName: 'oem5.inf', OriginalName: 'realtek.inf', Provider: 'Realtek', ClassName: 'Media', Version: '6.0.9285.1', Signer: 'Realtek Semiconductor Corp' },
+          { PublishedName: 'oem12.inf', OriginalName: 'nvidia.inf', Provider: 'NVIDIA', ClassName: 'Display', Version: '551.86', Signer: 'NVIDIA Corporation' },
+        ]);
+      }
+    } catch (e) {
+      addNotification('Driver Sweeper', 'Failed to load drivers: ' + e.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchDrivers(); }, []);
+
+  const handleRemove = async (driver) => {
+    const ok = await confirm({
+      title: 'Force-Remove Driver',
+      message: `Permanently remove "${driver.PublishedName}" (${driver.Provider} ${driver.ClassName}) from the driver store? Hardware using this driver may stop working.`,
+      confirmLabel: 'Force Remove',
+      danger: true,
+    });
+    if (!ok) return;
+    setRemoving(driver.PublishedName);
+    try {
+      if (window.api) {
+        const res = await window.api.runSystemCommand('driver-install', ['uninstall', driver.PublishedName]);
+        const m = res.stdout?.match(/===RESULT===\s*(\{[\s\S]*\})/);
+        const obj = m ? JSON.parse(m[1]) : null;
+        if (obj?.success) {
+          addNotification('Driver Sweeper', `Removed ${driver.PublishedName}.`, 'success');
+          await fetchDrivers();
+        } else {
+          addNotification('Driver Sweeper', `Failed to remove: exit ${obj?.exitCode}`, 'error');
+        }
+      } else {
+        await new Promise(r => setTimeout(r, 500));
+        addNotification('Driver Sweeper', `Mock removed ${driver.PublishedName}.`, 'success');
+        setDrivers(prev => prev.filter(d => d.PublishedName !== driver.PublishedName));
+      }
+    } catch (e) {
+      addNotification('Driver Sweeper', e.message, 'error');
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  const filtered = drivers.filter(d => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (d.PublishedName || '').toLowerCase().includes(q) ||
+           (d.Provider || '').toLowerCase().includes(q) ||
+           (d.ClassName || '').toLowerCase().includes(q) ||
+           (d.OriginalName || '').toLowerCase().includes(q);
+  });
+
+  return (
+    <div className="space-y-5 text-left">
+      <div className="flex justify-between items-center gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-slate-200">Driver Sweeper</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Force-remove third-party drivers from the Windows driver store.</p>
+        </div>
+        <button
+          onClick={fetchDrivers}
+          disabled={loading}
+          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-xs font-bold rounded-lg border border-brand-border text-slate-300 flex items-center gap-2 cursor-pointer"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+        </button>
+      </div>
+
+      <div className="glass-panel border border-amber-500/30 bg-amber-950/5 rounded-xl p-3 flex items-start gap-2">
+        <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+        <p className="text-[11px] text-amber-300/80">Microsoft-signed drivers are hidden to prevent breaking Windows. Removing third-party drivers may cause hardware to stop working until you reinstall.</p>
+      </div>
+
+      <div className="relative flex items-center max-w-md">
+        <Search className="absolute left-3 h-4 w-4 text-slate-500" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search driver, provider, class..."
+          className="pl-9 pr-4 py-2 w-full bg-slate-900 border border-brand-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand-violet"
+        />
+      </div>
+
+      <div className="border border-brand-border rounded-xl overflow-hidden">
+        {loading ? (
+          <div className="py-16 flex flex-col items-center gap-3">
+            <Loader2 className="h-8 w-8 animate-spin text-brand-violet" />
+            <p className="text-xs text-slate-400">Enumerating driver store...</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="py-12 text-center">
+            <p className="text-xs text-slate-500">{drivers.length === 0 ? 'No third-party drivers found.' : 'No drivers match your search.'}</p>
+          </div>
+        ) : (
+          <div className="max-h-[500px] overflow-y-auto divide-y divide-brand-border">
+            {filtered.map((d, i) => (
+              <div key={i} className="p-3 flex items-center justify-between gap-3 hover:bg-slate-800/30">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-slate-200 truncate">{d.PublishedName}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5 truncate">
+                    {d.Provider || 'Unknown'} · {d.ClassName || '?'} · v{d.Version || '?'}
+                    {d.Signer ? ` · ${d.Signer}` : ''}
+                  </div>
+                  {d.OriginalName && <div className="text-[10px] text-slate-600 font-mono mt-0.5">{d.OriginalName}</div>}
+                </div>
+                <button
+                  onClick={() => handleRemove(d)}
+                  disabled={removing !== null}
+                  className="px-3 py-1.5 bg-rose-950 hover:bg-rose-900 disabled:opacity-50 border border-rose-500/30 text-rose-400 text-[11px] font-bold rounded flex items-center gap-1 cursor-pointer"
+                >
+                  {removing === d.PublishedName ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                  {removing === d.PublishedName ? 'Removing...' : 'Force Remove'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

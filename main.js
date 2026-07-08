@@ -61,6 +61,62 @@ function writeLog(level, message) {
   queueWrite(logFile, logMsg);
 }
 
+function rotateLogs() {
+  try {
+    if (!fs.existsSync(logDir)) return;
+    const files = fs.readdirSync(logDir);
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    
+    if (fs.existsSync(auditFile)) {
+      const stats = fs.statSync(auditFile);
+      if (stats.size > 10 * 1024 * 1024) { // 10 MB
+        fs.renameSync(auditFile, `${auditFile}.${Date.now()}.bak`);
+      }
+    }
+
+    for (const file of files) {
+      if (file.endsWith('.log') || file.includes('.bak')) {
+        const filePath = path.join(logDir, file);
+        const stats = fs.statSync(filePath);
+        if (stats.mtimeMs < thirtyDaysAgo) {
+          fs.unlinkSync(filePath);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Log rotation failed:', e);
+  }
+}
+
+// Perform log rotation once on startup
+rotateLogs();
+
+
+process.on('uncaughtException', (error) => {
+  writeLog('ERROR', `Uncaught Exception: ${error.message}\n${error.stack}`);
+  if (app.isReady()) {
+    dialog.showMessageBoxSync({
+      type: 'error',
+      title: 'Fatal Error',
+      message: 'A fatal error occurred. The application may need to restart.',
+      detail: error.message
+    });
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  const msg = reason instanceof Error ? `${reason.message}\n${reason.stack}` : String(reason);
+  writeLog('ERROR', `Unhandled Rejection: ${msg}`);
+  if (app.isReady()) {
+    dialog.showMessageBoxSync({
+      type: 'error',
+      title: 'Unhandled Error',
+      message: 'An unexpected error occurred.',
+      detail: reason instanceof Error ? reason.message : String(reason)
+    });
+  }
+});
+
 function writeAudit(action, details, result) {
   // Unified schema - matches scripts/_common.ps1 Write-AuditLog so that
   // repair_summary_report.ps1 (which reads audit.jsonl) can pick up events
@@ -83,6 +139,7 @@ function writeAudit(action, details, result) {
 
 // 1. Settings persistence store
 const DEFAULT_SETTINGS = {
+  schemaVersion: 1,
   theme: 'dark',
   autoPilotDay: 'Sunday',
   autoPilotTime: '03:00',
@@ -96,7 +153,9 @@ const DEFAULT_SETTINGS = {
   },
   dnsPreference: 'Original',
   runAtStartup: false,
-  lastRestorePointId: null
+  lastRestorePointId: null,
+  optInAnalytics: false,
+  optInCrashReports: false
 };
 
 class SettingsStore {
@@ -408,6 +467,8 @@ async function createWindow() {
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+  mainWindow.webContents.on('console-message', (e, l, m) => require('fs').appendFileSync('renderer.log', m + '\n'));
+  mainWindow.webContents.on('console-message', (e, l, m) => console.log('[RENDERER]', m));
   }
 
   mainWindow.on('close', (event) => {
@@ -479,6 +540,23 @@ app.on('ready', () => {
     });
   } catch (e) {
     writeLog('WARN', 'Failed to register global shortcut: ' + e.message);
+  }
+});
+
+app.on('before-quit', (event) => {
+  if (activeChildCount && activeChildCount() > 0) {
+    const choice = dialog.showMessageBoxSync(mainWindow || null, {
+      type: 'warning',
+      buttons: ['Cancel', 'Force Quit'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Active Operations',
+      message: 'There are system operations (like SFC/DISM or Registry Backup) still running in the background. Quitting now will kill them and may leave your system in an inconsistent state.\n\nAre you sure you want to force quit?'
+    });
+    if (choice === 0) {
+      event.preventDefault();
+      return;
+    }
   }
 });
 
@@ -594,12 +672,11 @@ ipcMain.handle('check-driver-backup', (event, pnpDeviceId) => {
 ipcMain.handle('run-system-command', async (event, commandKey, args = [], options = {}) => {
   try {
     rateLimit('run-system-command');
-    // De-duplicate in-flight read-only commands so a double-click doesn't
-    // launch two sfc /scannow processes simultaneously. Destructive commands
-    // (those with confirmationRequired) are NOT deduplicated to allow queued
-    // operations - but they do share the rate limit above.
+    // De-duplicate in-flight commands so a double-click doesn't
+    // launch two processes simultaneously. Commands that explicitly
+    // bypass confirmation are NOT deduplicated to allow queued operations.
     const readOnly = !options.bypassConfirmation;
-    const dedupeKey = readOnly ? `cmd:${commandKey}` : null;
+    const dedupeKey = readOnly ? `cmd:${commandKey}:${JSON.stringify(args)}` : null;
     const exec = () => executeAllowedCommand(commandKey, args, options);
     writeLog('INFO', `Requested allowlisted command: ${commandKey}`);
     const result = dedupeKey ? await dedupe(dedupeKey, exec) : await exec();

@@ -31,8 +31,34 @@ export function SystemMetricsProvider({ children }) {
 
   useEffect(() => {
     loadMetrics();
-    const interval = setInterval(loadMetrics, 2000); // Polling every 2 seconds
-    return () => clearInterval(interval);
+    
+    let interval;
+    const startPolling = () => {
+      interval = setInterval(loadMetrics, 2000);
+    };
+    const stopPolling = () => {
+      if (interval) clearInterval(interval);
+    };
+
+    if (document.visibilityState === 'visible') {
+      startPolling();
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadMetrics();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   return (

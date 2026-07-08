@@ -288,7 +288,26 @@ const ALLOWED_COMMANDS = {
     script: 'create_restore_point.ps1',
     timeout: 120000,
     confirmationRequired: true,
-    confirmationMessage: 'This will create a Windows restore point before maintenance. Continue?'
+    confirmationMessage: 'This will create a Windows restore point before maintenance. Continue?',
+    buildArgs: ([description]) => {
+      if (description !== undefined && typeof description !== 'string') {
+        throw new Error('Invalid description.');
+      }
+      return ['-Description', description || 'SolasCare Restore Point'];
+    }
+  },
+  'defender-scan': {
+    type: 'script',
+    script: 'defender_scan.ps1',
+    timeout: 600000,
+    streamChannel: 'care-out'
+  },
+  'remove-bloatware': {
+    type: 'script',
+    script: 'remove_bloatware.ps1',
+    timeout: 300000,
+    streamChannel: 'care-out',
+    buildArgs: ([dryRun]) => dryRun ? ['-DryRun'] : []
   },
   'junk-scan': {
     type: 'script',
@@ -544,7 +563,7 @@ const ALLOWED_COMMANDS = {
   },
   'open-startup-manager': {
     type: 'powershell',
-    command: 'Start-Process taskmgr.exe /n ,4',
+    command: 'Start-Process taskmgr.exe -ArgumentList \'/0 /startup\'',
     timeout: 10000,
     streamChannel: 'care-out'
   },
@@ -727,9 +746,9 @@ const ALLOWED_COMMANDS = {
   'registry-restore': {
     type: 'script',
     script: 'registry_backup.ps1',
-    timeout: 60000,
+    timeout: 300000,
     confirmationRequired: true,
-    confirmationMessage: 'Registry restore karega — system restart required ho sakta hai. Continue?',
+    confirmationMessage: 'This will restore the registry. A system restart may be required. Continue?',
     buildArgs: ([file]) => {
       if (typeof file !== 'string') throw new Error('Invalid file path');
       const resolved = path.resolve(file);
@@ -1561,5 +1580,6 @@ module.exports = {
   executeAllowedCommand,
   killActiveProcess,
   getScriptPath,
-  activeChildCount: () => activeChildProcesses.size
+  activeChildCount: () => activeChildProcesses.size,
+  ALLOWED_COMMANDS
 };
