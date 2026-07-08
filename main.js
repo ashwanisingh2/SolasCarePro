@@ -347,8 +347,15 @@ async function createWindow() {
   const isAdmin = await checkIsAdmin();
   const tempFlagPath = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'solas_relaunch.flag');
 
+  // In dev mode the app is launched via `electron .` from a (usually non-elevated)
+  // terminal alongside the Vite server. Relaunching as admin here would quit this
+  // process, causing `concurrently -k` to kill the Vite dev server, so the elevated
+  // window never loads. Skip elevation in dev; the packaged build launches elevated
+  // via the app manifest (requireAdministrator) anyway.
+  const isDevRun = !app.isPackaged && !!process.env.VITE_DEV_SERVER_URL;
+
   // Relaunch dialog with loop-protection
-  if (!isAdmin) {
+  if (!isAdmin && !isDevRun) {
     let isLoop = false;
     if (fs.existsSync(tempFlagPath)) {
       try {
