@@ -16,7 +16,9 @@ const SCRIPTS = [
   { id: 'battery-report', name: 'Generate Battery Report', desc: 'Creates an HTML report of battery health on your Desktop.', type: 'system' },
   { id: 'clean-temp', name: 'Clean Temporary Files', desc: 'Force deletes files in system and user Temp directories.', type: 'system' },
   { id: 'netstat', name: 'Network Connections (Netstat)', desc: 'Lists active TCP connections and listening ports.', type: 'network' },
-  { id: 'system-uptime', name: 'System Uptime Check', desc: 'Shows the exact time elapsed since the last system boot.', type: 'system' }
+  { id: 'system-uptime', name: 'System Uptime Check', desc: 'Shows the exact time elapsed since the last system boot.', type: 'system' },
+  { id: 'clear-event-logs', name: 'Clear All Event Logs', desc: 'Wipes all Windows Event Viewer logs. Good for fresh monitoring.', type: 'system' },
+  { id: 'reset-network-adapters', name: 'Restart Network Adapters', desc: 'Disables and re-enables all physical and virtual network adapters.', type: 'network' }
 ];
 
 export default function CommandHub() {

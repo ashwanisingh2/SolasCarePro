@@ -97,77 +97,63 @@ export default function DeviceDetails() {
                   {error}
                 </div>
               ) : deviceInfo ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* OS */}
-                  <div className="glass-panel border border-brand-border rounded-xl p-5 space-y-3">
-                    <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2 border-b border-brand-border pb-2">
-                      <Zap className="h-4 w-4 text-brand-cyan" /> Operating System
-                    </h3>
-                    <div className="space-y-2 text-xs text-slate-400">
-                      <p><span className="text-slate-500">Name:</span> <span className="text-white font-semibold">{deviceInfo.OS.OsName}</span></p>
-                      <p><span className="text-slate-500">Version:</span> <span className="text-white font-semibold">{deviceInfo.OS.OsVersion}</span></p>
-                      <p><span className="text-slate-500">Architecture:</span> <span className="text-white font-semibold">{deviceInfo.OS.OsArchitecture}</span></p>
-                      <p><span className="text-slate-500">Host Name:</span> <span className="text-white font-semibold">{deviceInfo.OS.CsName}</span></p>
+                <div className="glass-panel border border-brand-border rounded-xl p-5">
+                  <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2 border-b border-brand-border pb-3 mb-4">
+                    <Server className="h-5 w-5 text-brand-violet" /> System Specifications Overview
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 text-sm">
+                    {/* OS Summary */}
+                    <div className="flex items-center gap-3">
+                      <Zap className="h-5 w-5 text-brand-cyan shrink-0" />
+                      <div>
+                        <p className="text-slate-500 text-xs">Operating System</p>
+                        <p className="text-white font-semibold">{deviceInfo.OS.OsName} ({deviceInfo.OS.OsArchitecture})</p>
+                      </div>
+                    </div>
+
+                    {/* CPU Summary */}
+                    <div className="flex items-center gap-3">
+                      <Cpu className="h-5 w-5 text-brand-violet shrink-0" />
+                      <div>
+                        <p className="text-slate-500 text-xs">Processor</p>
+                        <p className="text-white font-semibold">{deviceInfo.CPU.Name}</p>
+                      </div>
+                    </div>
+
+                    {/* RAM Summary */}
+                    <div className="flex items-center gap-3">
+                      <Activity className="h-5 w-5 text-emerald-400 shrink-0" />
+                      <div>
+                        <p className="text-slate-500 text-xs">Installed Memory (RAM)</p>
+                        <p className="text-white font-semibold">{deviceInfo.RAM} GB</p>
+                      </div>
+                    </div>
+
+                    {/* GPU Summary */}
+                    <div className="flex items-center gap-3">
+                      <Monitor className="h-5 w-5 text-amber-400 shrink-0" />
+                      <div>
+                        <p className="text-slate-500 text-xs">Graphics</p>
+                        <p className="text-white font-semibold">
+                          {deviceInfo.GPU.map(g => `${g.Name} (${g.VRAM_GB} GB)`).join(' | ')}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* CPU */}
-                  <div className="glass-panel border border-brand-border rounded-xl p-5 space-y-3">
-                    <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2 border-b border-brand-border pb-2">
-                      <Cpu className="h-4 w-4 text-brand-violet" /> Processor
-                    </h3>
-                    <div className="space-y-2 text-xs text-slate-400">
-                      <p><span className="text-slate-500">Model:</span> <span className="text-white font-semibold">{deviceInfo.CPU.Name}</span></p>
-                      <p><span className="text-slate-500">Cores:</span> <span className="text-white font-semibold">{deviceInfo.CPU.NumberOfCores}</span></p>
-                      <p><span className="text-slate-500">Logical Processors:</span> <span className="text-white font-semibold">{deviceInfo.CPU.NumberOfLogicalProcessors}</span></p>
+                  {/* Storage Summary */}
+                  <div className="mt-6 pt-4 border-t border-slate-800/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <HardDrive className="h-4 w-4 text-blue-400" />
+                      <p className="text-slate-500 text-xs">Storage Drives</p>
                     </div>
-                  </div>
-
-                  {/* RAM */}
-                  <div className="glass-panel border border-brand-border rounded-xl p-5 space-y-3">
-                    <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2 border-b border-brand-border pb-2">
-                      <Activity className="h-4 w-4 text-emerald-400" /> Memory
-                    </h3>
-                    <div className="space-y-2 text-xs text-slate-400">
-                      <p><span className="text-slate-500">Total Installed RAM:</span> <span className="text-white font-semibold text-lg">{deviceInfo.RAM} GB</span></p>
-                    </div>
-                  </div>
-
-                  {/* GPU */}
-                  <div className="glass-panel border border-brand-border rounded-xl p-5 space-y-3">
-                    <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2 border-b border-brand-border pb-2">
-                      <Monitor className="h-4 w-4 text-amber-400" /> Graphics
-                    </h3>
-                    <div className="space-y-3 text-xs text-slate-400">
-                      {deviceInfo.GPU.map((gpu, idx) => (
-                        <div key={idx} className="p-3 bg-slate-950/30 rounded border border-slate-800/50">
-                          <p><span className="text-slate-500">Name:</span> <span className="text-white font-semibold">{gpu.Name}</span></p>
-                          <p><span className="text-slate-500">VRAM:</span> <span className="text-white font-semibold">{gpu.VRAM_GB} GB</span></p>
-                          <p><span className="text-slate-500">Driver:</span> <span className="text-white">{gpu.DriverVersion}</span></p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Storage */}
-                  <div className="glass-panel border border-brand-border rounded-xl p-5 space-y-3 md:col-span-2">
-                    <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2 border-b border-brand-border pb-2">
-                      <HardDrive className="h-4 w-4 text-blue-400" /> Storage Drives
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-400">
+                    <div className="flex flex-wrap gap-4">
                       {deviceInfo.Storage.map((drive, idx) => (
-                        <div key={idx} className="p-3 bg-slate-950/30 rounded border border-slate-800/50 flex flex-col gap-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-white font-bold">{drive.DeviceID} {drive.VolumeName ? `(${drive.VolumeName})` : ''}</span>
-                            <span className="text-brand-cyan">{drive.FreeSpace_GB} GB Free</span>
-                          </div>
-                          <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
-                            <div 
-                              className="bg-brand-violet h-1.5" 
-                              style={{ width: `${Math.max(0, 100 - (drive.FreeSpace_GB / drive.Size_GB) * 100)}%` }} 
-                            />
-                          </div>
-                          <p className="text-right text-slate-500">Total: {drive.Size_GB} GB</p>
+                        <div key={idx} className="bg-slate-950/50 px-4 py-2 rounded-lg border border-slate-800/50">
+                          <span className="text-white font-bold mr-2">{drive.DeviceID}</span>
+                          <span className="text-brand-cyan text-xs">{drive.FreeSpace_GB} GB Free </span>
+                          <span className="text-slate-500 text-xs">/ {drive.Size_GB} GB</span>
                         </div>
                       ))}
                     </div>

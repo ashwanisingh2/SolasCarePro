@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Wrench, MonitorCheck, Cpu, CircuitBoard, Package, Globe,
   Sparkles, Settings2, Database, Info, Activity, Bot, LifeBuoy, Zap, Settings,
   Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope, Brain, FileText,
-  Trash2, Scissors, Copy, FileX, Unlock, Clock, Wifi, Shield, ClipboardList, Loader2, Terminal
+  Trash2, Scissors, Copy, FileX, Unlock, Clock, Wifi, Shield, ClipboardList, Loader2, Terminal, Skull, ChevronDown, ChevronRight
 } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -18,6 +18,8 @@ const ServiceManager = React.lazy(() => import('./components/ServiceManager'));
 const RegistryManager = React.lazy(() => import('./components/RegistryManager'));
 const SettingsView = React.lazy(() => import('./components/Settings'));
 const ReportCenter = React.lazy(() => import('./components/ReportCenter'));
+const BsodAnalyzer = React.lazy(() => import('./components/BsodAnalyzer'));
+const AiDiagnostics = React.lazy(() => import('./components/AiDiagnostics'));
 
 const StartupManager = React.lazy(() => import('./components/StartupManager'));
 const NetworkMonitor = React.lazy(() => import('./components/NetworkMonitor'));
@@ -31,6 +33,7 @@ const FileUnlocker = React.lazy(() => import('./components/FileUnlocker'));
 const DuplicateFinder = React.lazy(() => import('./components/DuplicateFinder'));
 const BrokenShortcuts = React.lazy(() => import('./components/BrokenShortcuts'));
 const CommandHub = React.lazy(() => import('./components/CommandHub'));
+const WindowsTweaks = React.lazy(() => import('./components/WindowsTweaks'));
 const HostsEditor = React.lazy(() => import('./components/HostsEditor'));
 const Onboarding = React.lazy(() => import('./components/Onboarding'));
 
@@ -45,6 +48,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isWindowActive, setIsWindowActive] = useState(true);
   const [visitedTabs, setVisitedTabs] = useState(['dashboard']);
+  const [expandedCats, setExpandedCats] = useState({ 'Main': true, 'Core Tools': true, 'Logs & Settings': true, 'System Tools': true, 'Cleanup & Privacy': true, 'Extra Tools': true });
 
   // Load persistence theme and startup init
   useEffect(() => {
@@ -117,46 +121,71 @@ export default function App() {
     setActiveTab(tabId);
   };
 
-  // Refactored navigation to be much cleaner and categorized accurately
-  const navigation = [
-    { isHeader: true, label: 'Main' },
-    { id: 'dashboard',      label: 'Unified Dashboard',  icon: LayoutDashboard,  component: UnifiedDashboard },
-    
-    { isHeader: true, label: 'Core Tools' },
-    { id: 'driver',         label: 'Drivers',            icon: Cpu,              component: DriverManager },
-    { id: 'hardware',       label: 'Hardware Diagnostics', icon: CircuitBoard,   component: HardwareDiagnostics },
-    { id: 'device-details', label: 'Device Details',     icon: Info,             component: DeviceDetails },
-    { id: 'performance',    label: 'Performance Tuning', icon: Zap,              component: PerformanceTuning },
-    { id: 'software',       label: 'Software Updater',   icon: Package,          component: SoftwareUpdater },
-    
-    { isHeader: true, label: 'System Tools' },
-    { id: 'registry',       label: 'Registry',           icon: Database,         component: RegistryManager },
-    { id: 'services',       label: 'Services',           icon: Settings2,        component: ServiceManager },
-    { id: 'startup',        label: 'Startup Manager',    icon: Clock,            component: StartupManager },
-    { id: 'network',        label: 'Network Monitor',    icon: Wifi,             component: NetworkMonitor },
-    
-    { isHeader: true, label: 'Cleanup & Privacy' },
-    { id: 'privacy',        label: 'Privacy Cleaner',    icon: Shield,           component: PrivacyCleaner },
-    { id: 'browser',        label: 'Browser Repair',     icon: Globe,            component: BrowserRepair },
-    { id: 'hosts-editor',   label: 'Hosts Ad-Blocker',   icon: ShieldAlert,      component: HostsEditor },
-
-    { isHeader: true, label: 'Logs & Settings' },
-    { id: 'history',        label: 'Repair History',     icon: ClipboardList,    component: HistoryLogs },
-    { id: 'report-center',  label: 'Report Center',      icon: FileText,         component: ReportCenter },
-    { id: 'settings',       label: 'Settings',           icon: Settings,         component: SettingsView },
-
-    { isHeader: true, label: 'Extra Tools' },
-    { id: 'command-hub',       label: 'Command Hub',       icon: Terminal,       component: CommandHub },
-    { id: 'force-uninstaller', label: 'Force Uninstaller', icon: Trash2,         component: ForceUninstaller },
-    { id: 'file-shredder',     label: 'File Shredder',     icon: Scissors,       component: FileShredder },
-    { id: 'file-unlocker',     label: 'File Unlocker',     icon: Unlock,         component: FileUnlocker },
-    { id: 'duplicate-finder',  label: 'Duplicate Finder',  icon: Copy,           component: DuplicateFinder },
-    { id: 'broken-shortcuts',  label: 'Broken Shortcuts',  icon: FileX,          component: BrokenShortcuts },
+  // Refactored navigation into structured categories for collapsible UI
+  const navigationCategories = [
+    {
+      label: 'Main',
+      items: [
+        { id: 'dashboard',      label: 'Unified Dashboard',  icon: LayoutDashboard,  component: UnifiedDashboard }
+      ]
+    },
+    {
+      label: 'Core Tools',
+      items: [
+        { id: 'driver',         label: 'Drivers',            icon: Cpu,              component: DriverManager },
+        { id: 'hardware',       label: 'Hardware Diagnostics', icon: CircuitBoard,   component: HardwareDiagnostics },
+        { id: 'device-details', label: 'Device Details',     icon: Info,             component: DeviceDetails },
+        { id: 'performance',    label: 'Performance Tuning', icon: Zap,              component: PerformanceTuning },
+        { id: 'software',       label: 'Software Updater',   icon: Package,          component: SoftwareUpdater },
+        { id: 'ai-diagnostics', label: 'Solas AI Diagnostics', icon: Bot,            component: AiDiagnostics }
+      ]
+    },
+    {
+      label: 'System Tools',
+      items: [
+        { id: 'registry',       label: 'Registry',           icon: Database,         component: RegistryManager },
+        { id: 'services',       label: 'Services',           icon: Settings2,        component: ServiceManager },
+        { id: 'startup',        label: 'Startup Manager',    icon: Clock,            component: StartupManager },
+        { id: 'network',        label: 'Network Monitor',    icon: Wifi,             component: NetworkMonitor }
+      ]
+    },
+    {
+      label: 'Cleanup & Privacy',
+      items: [
+        { id: 'privacy',        label: 'Privacy Cleaner',    icon: Shield,           component: PrivacyCleaner },
+        { id: 'browser',        label: 'Browser Repair',     icon: Globe,            component: BrowserRepair },
+        { id: 'hosts-editor',   label: 'Hosts Ad-Blocker',   icon: ShieldAlert,      component: HostsEditor }
+      ]
+    },
+    {
+      label: 'Logs & Settings',
+      items: [
+        { id: 'history',        label: 'Repair History',     icon: ClipboardList,    component: HistoryLogs },
+        { id: 'bsod-analyzer',  label: 'BSOD Analyzer',      icon: Skull,            component: BsodAnalyzer },
+        { id: 'report-center',  label: 'Report Center',      icon: FileText,         component: ReportCenter },
+        { id: 'settings',       label: 'Settings',           icon: Settings,         component: SettingsView }
+      ]
+    },
+    {
+      label: 'Extra Tools',
+      items: [
+        { id: 'command-hub',       label: 'Command Hub',       icon: Terminal,       component: CommandHub },
+        { id: 'windows-tweaks',    label: 'Windows God Mode',  icon: ShieldAlert,    component: WindowsTweaks },
+        { id: 'force-uninstaller', label: 'Force Uninstaller', icon: Trash2,         component: ForceUninstaller },
+        { id: 'file-shredder',     label: 'File Shredder',     icon: Scissors,       component: FileShredder },
+        { id: 'file-unlocker',     label: 'File Unlocker',     icon: Unlock,         component: FileUnlocker },
+        { id: 'duplicate-finder',  label: 'Duplicate Finder',  icon: Copy,           component: DuplicateFinder },
+        { id: 'broken-shortcuts',  label: 'Broken Shortcuts',  icon: FileX,          component: BrokenShortcuts }
+      ]
+    }
   ];
 
   const getBreadcrumb = () => {
-    const item = navigation.find(n => n.id === activeTab);
-    return item ? item.label : 'Home';
+    for (const cat of navigationCategories) {
+      const item = cat.items.find(n => n.id === activeTab);
+      if (item) return item.label;
+    }
+    return 'Home';
   };
 
   if (loading) {
@@ -198,32 +227,46 @@ export default function App() {
           </div>
 
           {/* Navigation Items */}
-          <nav className="space-y-1">
-            {navigation.map((item, index) => {
-              if (item.isHeader) {
-                return (
-                  <div key={`header-${index}`} className="px-4 py-2 mt-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden md:block">
-                    {item.label}
-                  </div>
-                );
-              }
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
+          <nav className="space-y-2">
+            {navigationCategories.map((cat, index) => {
+              const isExpanded = expandedCats[cat.label];
               return (
-                <button
-                  key={item.id}
-                  onClick={() => handleSetActiveTab(item.id)}
-                  title={item.label}
-                  aria-label={`Navigate to ${item.label}`}
-                  className={`w-full flex items-center justify-center md:justify-start gap-3 px-3 md:px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
-                    isActive 
-                      ? 'bg-gradient-to-r from-brand-violet/20 to-brand-cyan/10 border-l-4 border-brand-violet text-white shadow-md' 
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                  }`}
-                >
-                  <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-brand-violet' : 'text-slate-400'}`} />
-                  <span className="hidden md:inline truncate">{item.label}</span>
-                </button>
+                <div key={index} className="flex flex-col">
+                  {/* Category Header */}
+                  <button
+                    onClick={() => setExpandedCats(prev => ({ ...prev, [cat.label]: !prev[cat.label] }))}
+                    className="flex items-center justify-between w-full px-4 py-2 mt-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider hover:text-white transition-colors cursor-pointer hidden md:flex group"
+                  >
+                    <span>{cat.label}</span>
+                    {isExpanded ? <ChevronDown className="h-3 w-3 opacity-50 group-hover:opacity-100" /> : <ChevronRight className="h-3 w-3 opacity-50 group-hover:opacity-100" />}
+                  </button>
+                  
+                  {/* Category Items */}
+                  {isExpanded && (
+                    <div className="space-y-1 mt-1">
+                      {cat.items.map(item => {
+                        const Icon = item.icon;
+                        const isActive = activeTab === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => handleSetActiveTab(item.id)}
+                            title={item.label}
+                            aria-label={`Navigate to ${item.label}`}
+                            className={`w-full flex items-center justify-center md:justify-start gap-3 px-3 md:px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
+                              isActive 
+                                ? 'bg-gradient-to-r from-brand-violet/20 to-brand-cyan/10 border-l-4 border-brand-violet text-white shadow-md' 
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                            }`}
+                          >
+                            <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-brand-violet' : 'text-slate-400'}`} />
+                            <span className="hidden md:inline truncate">{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </nav>
@@ -245,7 +288,7 @@ export default function App() {
             </div>
             </div>
             <div className="mt-auto px-4 pb-6">
-            <p className="hidden md:block text-[10px] text-slate-500 text-center mt-3 font-medium">SolasCare Pro v4.3.0</p>
+            <p className="hidden md:block text-[10px] text-slate-500 text-center mt-3 font-medium">SolasCare Pro v4.4.0</p>
           </div>
         </div>
       </aside>
@@ -268,7 +311,7 @@ export default function App() {
               <RefreshCw className="h-6 w-6 animate-spin text-brand-violet" />
             </div>
           }>
-            {navigation.filter(item => !item.isHeader).map((item) => {
+            {navigationCategories.flatMap(cat => cat.items).map((item) => {
               const Component = item.component;
               const isVisited = visitedTabs.includes(item.id);
               const isActive = activeTab === item.id;

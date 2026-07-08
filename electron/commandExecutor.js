@@ -242,10 +242,39 @@ const ALLOWED_COMMANDS = {
         'battery-report': 'powercfg /batteryreport /output "$env:USERPROFILE\\Desktop\\battery_report.html"; Write-Output "Battery report saved to Desktop as battery_report.html"',
         'clean-temp': 'Remove-Item -Path "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path "$env:windir\\Temp\\*" -Recurse -Force -ErrorAction SilentlyContinue; Write-Output "Temporary files cleared successfully."',
         'netstat': 'netstat -ano',
-        'system-uptime': 'Write-Output "System Uptime:"; (Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime'
+        'system-uptime': 'Write-Output "System Uptime:"; (Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime',
+        'clear-event-logs': 'wevtutil el | Foreach-Object {wevtutil cl "$_"}; Write-Output "All Windows Event Logs have been cleared successfully."',
+        'reset-network-adapters': 'Get-NetAdapter | Restart-NetAdapter; Write-Output "All network adapters have been restarted."'
       };
       if (!presets[action]) throw new Error('Invalid quick command action');
       return presets[action];
+    }
+  },
+  'get-bsod-logs': {
+    type: 'powershell',
+    timeout: 30000,
+    command: `Get-WinEvent -FilterHashtable @{LogName='System'; ID=1001} -MaxEvents 5 -ErrorAction SilentlyContinue | Select-Object TimeCreated, Message | ConvertTo-Json -Compress`
+  },
+  'get-critical-logs': {
+    type: 'powershell',
+    timeout: 30000,
+    command: `Get-WinEvent -FilterHashtable @{LogName=@('System','Application'); Level=2} -MaxEvents 15 -ErrorAction SilentlyContinue | Select-Object TimeCreated, ProviderName, Message | ConvertTo-Json -Compress`
+  },
+  'apply-win-tweak': {
+    type: 'powershell',
+    timeout: 30000,
+    confirmationRequired: true,
+    confirmationMessage: 'This will apply a Windows Registry tweak. Continue?',
+    buildCommand: ([tweakId, enable]) => {
+      const isEnable = enable === true || enable === 'true';
+      const tweaks = {
+        'context-menu': isEnable ? 'reg delete "HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}" /f; Stop-Process -Name explorer -Force' : 'reg add "HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32" /f /ve; Stop-Process -Name explorer -Force',
+        'telemetry': isEnable ? 'reg add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection" /v AllowTelemetry /t REG_DWORD /d 3 /f' : 'reg add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f',
+        'web-search': isEnable ? 'reg delete "HKCU\\Software\\Policies\\Microsoft\\Windows\\Explorer" /v DisableSearchBoxSuggestions /f' : 'reg add "HKCU\\Software\\Policies\\Microsoft\\Windows\\Explorer" /v DisableSearchBoxSuggestions /t REG_DWORD /d 1 /f',
+        'lock-ads': isEnable ? 'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager" /v RotatingLockScreenEnabled /t REG_DWORD /d 1 /f' : 'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager" /v RotatingLockScreenEnabled /t REG_DWORD /d 0 /f'
+      };
+      if (!tweaks[tweakId]) throw new Error('Invalid tweak id');
+      return tweaks[tweakId] + '; Write-Output "Tweak applied successfully."';
     }
   },
   'get-device-details': {
