@@ -278,14 +278,9 @@ const ALLOWED_COMMANDS = {
     }
   },
   'get-device-details': {
-    type: 'powershell',
-    timeout: 30000,
-    command: `$os = Get-ComputerInfo | Select-Object CsName, OsName, OsVersion, OsArchitecture, WindowsVersion
-$cpu = Get-WmiObject Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors | Select -First 1
-$ram = Get-WmiObject Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum | Select-Object @{Name="TotalRAM_GB"; Expression={[math]::round($_.Sum / 1GB, 2)}}
-$storage = @(Get-WmiObject Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID, VolumeName, @{Name="Size_GB";Expression={[math]::Round($_.Size/1GB,2)}}, @{Name="FreeSpace_GB";Expression={[math]::Round($_.FreeSpace/1GB,2)}})
-$gpu = @(Get-WmiObject Win32_VideoController | Select-Object Name, DriverVersion, @{Name="VRAM_GB";Expression={[math]::Round($_.AdapterRAM/1GB,2)}})
-@{ OS = $os; CPU = $cpu; RAM = $ram.TotalRAM_GB; Storage = $storage; GPU = $gpu } | ConvertTo-Json -Depth 4 -Compress`
+    type: 'script',
+    script: 'device_details.ps1',
+    timeout: 90000
   },
   'get-installed-software': {
     type: 'powershell',
