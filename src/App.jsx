@@ -137,7 +137,7 @@ export default function App() {
         { id: 'device-details', label: 'Device Details',     icon: Info,             component: DeviceDetails },
         { id: 'performance',    label: 'Performance Tuning', icon: Zap,              component: PerformanceTuning },
         { id: 'software',       label: 'Software Updater',   icon: Package,          component: SoftwareUpdater },
-        { id: 'ai-diagnostics', label: 'Solas AI Diagnostics', icon: Bot,            component: AiDiagnostics }
+        { id: 'ai-diagnostics', label: 'Solas Smart Diagnostics', icon: Bot,            component: AiDiagnostics }
       ]
     },
     {

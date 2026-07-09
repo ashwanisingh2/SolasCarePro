@@ -263,8 +263,6 @@ const ALLOWED_COMMANDS = {
   'apply-win-tweak': {
     type: 'powershell',
     timeout: 30000,
-    confirmationRequired: true,
-    confirmationMessage: 'This will apply a Windows Registry tweak. Continue?',
     buildCommand: ([tweakId, enable]) => {
       const isEnable = enable === true || enable === 'true';
       // isEnable === true means "apply the tweak described by the UI label"

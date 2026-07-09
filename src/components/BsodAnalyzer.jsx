@@ -35,12 +35,17 @@ export default function BsodAnalyzer() {
     const match = message.match(/bugcheck was: (.*?)\./i);
     const code = match ? match[1] : 'Unknown BugCheck';
     
-    let probableCause = 'Unknown';
-    if (code.includes('0x0000003B') || code.includes('0x0000001E')) probableCause = 'Graphics Driver / System Service Exception';
-    if (code.includes('0x0000000A') || code.includes('0x000000D1')) probableCause = 'Faulty Driver (IRQL_NOT_LESS_OR_EQUAL)';
-    if (code.includes('0x0000001A') || code.includes('0x00000050')) probableCause = 'RAM / Memory Management Error';
-    if (code.includes('0x0000007B')) probableCause = 'Inaccessible Boot Device (Storage/AHCI)';
-    if (code.includes('0x00000116')) probableCause = 'GPU Video TDR Failure (Display Driver)';
+    let probableCause = 'Unknown or Undocumented Error';
+    if (code.includes('0x0000003B') || code.includes('0x0000001E') || code.includes('0x0000007E')) probableCause = 'System Service Exception (Usually Graphics/Driver Fault)';
+    if (code.includes('0x0000000A') || code.includes('0x000000D1') || code.includes('0x000000C2')) probableCause = 'Faulty Driver (IRQL_NOT_LESS_OR_EQUAL / Bad Pool Caller)';
+    if (code.includes('0x0000001A') || code.includes('0x00000050') || code.includes('0x00000139')) probableCause = 'RAM / Memory Management Error (PAGE_FAULT_IN_NONPAGED_AREA)';
+    if (code.includes('0x0000007B') || code.includes('0x000000ED')) probableCause = 'Inaccessible Boot Device (Storage/AHCI or Corrupt Boot Sector)';
+    if (code.includes('0x00000116') || code.includes('0x00000117') || code.includes('0x00000119')) probableCause = 'GPU Video TDR Failure (Display Driver timeout)';
+    if (code.includes('0x000000EF') || code.includes('0x000000F4')) probableCause = 'Critical Process Died (System file corruption or malware)';
+    if (code.includes('0x00000133')) probableCause = 'DPC Watchdog Violation (Often SSD Firmware or SATA driver issue)';
+    if (code.includes('0x0000009F')) probableCause = 'Driver Power State Failure (Power management / Sleep issue)';
+    if (code.includes('0x00000109')) probableCause = 'Critical Structure Corruption (RAM or Rootkit modification)';
+    if (code.includes('0x00000124')) probableCause = 'WHEA Uncorrectable Error (Hardware Failure - CPU Overheating/Voltage)';
 
     return { code, probableCause };
   };

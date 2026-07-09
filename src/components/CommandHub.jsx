@@ -1,28 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Terminal, Play, Loader2, AlertCircle, RefreshCw, XCircle, Trash2, Code } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
+import { useConfirm } from './shared/ConfirmModal';
 
+// `danger: true` scripts change system state (wipe logs, drop network, stop
+// services, delete files) and prompt for confirmation before running.
 const SCRIPTS = [
   { id: 'flush-dns', name: 'Flush DNS Cache', desc: 'Resolves website loading issues by clearing DNS cache.', type: 'network' },
-  { id: 'winsock-reset', name: 'Winsock Reset', desc: 'Resets network adapters and TCP/IP stack.', type: 'network' },
+  { id: 'winsock-reset', name: 'Winsock Reset', desc: 'Resets network adapters and TCP/IP stack.', type: 'network', danger: true },
   { id: 'gpupdate', name: 'Force Group Policy Update', desc: 'Forces an immediate update of group policies (gpupdate /force).', type: 'system' },
   { id: 'system-info', name: 'System Info Report', desc: 'Generates a detailed system hardware and OS report via CMD.', type: 'system' },
   { id: 'task-list', name: 'Active Processes', desc: 'Lists all currently running processes and services via CMD.', type: 'system' },
   { id: 'chkdsk', name: 'Quick Check Disk', desc: 'Scans the file system for logical errors (chkdsk /scan).', type: 'repair' },
-  { id: 'print-spooler-reset', name: 'Reset Print Spooler', desc: 'Fixes stuck printing jobs by clearing the spooler queue.', type: 'repair' },
-  { id: 'wmi-rebuild', name: 'Rebuild WMI Repository', desc: 'Fixes Windows Management Instrumentation corruption.', type: 'repair' },
-  { id: 'wu-cache-clear', name: 'Clear Windows Update Cache', desc: 'Fixes stuck updates by clearing the SoftwareDistribution folder.', type: 'repair' },
-  { id: 're-register-apps', name: 'Re-register Store Apps', desc: 'Repairs broken or missing Windows 10/11 default apps.', type: 'repair' },
+  { id: 'print-spooler-reset', name: 'Reset Print Spooler', desc: 'Fixes stuck printing jobs by clearing the spooler queue.', type: 'repair', danger: true },
+  { id: 'wmi-rebuild', name: 'Rebuild WMI Repository', desc: 'Fixes Windows Management Instrumentation corruption.', type: 'repair', danger: true },
+  { id: 'wu-cache-clear', name: 'Clear Windows Update Cache', desc: 'Fixes stuck updates by clearing the SoftwareDistribution folder.', type: 'repair', danger: true },
+  { id: 're-register-apps', name: 'Re-register Store Apps', desc: 'Repairs broken or missing Windows 10/11 default apps.', type: 'repair', danger: true },
   { id: 'battery-report', name: 'Generate Battery Report', desc: 'Creates an HTML report of battery health on your Desktop.', type: 'system' },
-  { id: 'clean-temp', name: 'Clean Temporary Files', desc: 'Force deletes files in system and user Temp directories.', type: 'system' },
+  { id: 'clean-temp', name: 'Clean Temporary Files', desc: 'Force deletes files in system and user Temp directories.', type: 'system', danger: true },
   { id: 'netstat', name: 'Network Connections (Netstat)', desc: 'Lists active TCP connections and listening ports.', type: 'network' },
   { id: 'system-uptime', name: 'System Uptime Check', desc: 'Shows the exact time elapsed since the last system boot.', type: 'system' },
-  { id: 'clear-event-logs', name: 'Clear All Event Logs', desc: 'Wipes all Windows Event Viewer logs. Good for fresh monitoring.', type: 'system' },
-  { id: 'reset-network-adapters', name: 'Restart Network Adapters', desc: 'Disables and re-enables all physical and virtual network adapters.', type: 'network' }
+  { id: 'clear-event-logs', name: 'Clear All Event Logs', desc: 'Wipes all Windows Event Viewer logs (including crash & BSOD history).', type: 'system', danger: true },
+  { id: 'reset-network-adapters', name: 'Restart Network Adapters', desc: 'Disables and re-enables all physical and virtual network adapters.', type: 'network', danger: true }
 ];
 
 export default function CommandHub() {
   const { addNotification } = useNotification();
+  const confirm = useConfirm();
   const [running, setRunning] = useState(null);
   const [terminalOutput, setTerminalOutput] = useState([
     '[SYSTEM] SolasCare Command Hub Initialized...',
@@ -61,6 +65,19 @@ export default function CommandHub() {
 
   const executeScript = async (scriptId, scriptName) => {
     if (running) return;
+
+    // Destructive scripts require explicit confirmation before running.
+    const script = SCRIPTS.find(s => s.id === scriptId);
+    if (script?.danger) {
+      const ok = await confirm({
+        title: scriptName,
+        message: `${script.desc} This changes system state and cannot be undone.`,
+        confirmLabel: 'Run Anyway',
+        danger: true
+      });
+      if (!ok) return;
+    }
+
     setRunning(scriptId);
     setTerminalOutput(prev => [...prev, `\n> Executing script: ${scriptName}...`]);
     

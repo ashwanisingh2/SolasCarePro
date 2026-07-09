@@ -14,6 +14,11 @@ export default function WindowsTweaks() {
   const [processing, setProcessing] = useState(null);
 
   const applyTweak = async (tweakId, enable, name) => {
+    const actionText = enable ? 'apply' : 'revert';
+    if (!window.confirm(`Are you sure you want to ${actionText} the "${name}" tweak? This will modify your Windows Registry.`)) {
+      return;
+    }
+    
     setProcessing(tweakId);
     try {
       if (window.api) {
