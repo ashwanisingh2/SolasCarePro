@@ -11,7 +11,9 @@
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SolasCare Pro</title>
-    <script>window.addEventListener('error', (e) => { document.body.innerHTML += <div style='color:red;z-index:9999;position:absolute;top:0;background:white;padding:10px;'>ERROR:  at :</div> }); window.addEventListener('unhandledrejection', (e) => { document.body.innerHTML += <div style='color:red;z-index:9999;position:absolute;top:50px;background:white;padding:10px;'>PROMISE ERROR: </div> });</script>
+    <!-- FIX: Removed broken inline <script> (was both a JS syntax error due to
+         unquoted <div> JSX-like syntax AND blocked by CSP script-src 'self').
+         Error handling now lives entirely in src/main.jsx via React ErrorBoundary. -->
   </head>
   <body class="bg-brand-navy text-white antialiased overflow-hidden select-none">
     <div id="root"></div>

@@ -11,7 +11,9 @@ let defaultSettingsRef = null;
 
 const logDir = path.join(process.env.APPDATA, 'SolasCare', 'logs');
 const reportsDir = path.join(process.env.APPDATA, 'SolasCare', 'reports');
-const auditFile = path.join(logDir, 'audit.log');
+// FIX: main.js writes to audit.jsonl (not audit.log). This was a path mismatch
+// that caused the History Logs feature to never see main-process audit events.
+const auditFile = path.join(logDir, 'audit.jsonl');
 
 function initCommandExecutor(getMainWindowFn, logFn, auditFn, settingsStore, defaultSettings) {
   getMainWindowRef = getMainWindowFn;
@@ -839,7 +841,7 @@ const ALLOWED_COMMANDS = {
     script: 'ram_diagnostic.ps1',
     timeout: 15000,
     confirmationRequired: true,
-    confirmationMessage: 'Memory Diagnostic next reboot pe chalega. PC restart karna padega. Continue?',
+    confirmationMessage: 'Memory Diagnostic will run on next reboot. Your PC will need to be restarted. Continue?',
     buildArgs: () => ['-Action', 'schedule']
   },
   'get-ram-diagnostic-result': {
@@ -859,7 +861,7 @@ const ALLOWED_COMMANDS = {
     script: 'service_repair.ps1',
     timeout: 60000,
     confirmationRequired: true,
-    confirmationMessage: 'Service ko repair/restart/set-startup karega. Continue?',
+    confirmationMessage: 'This will repair, restart, or set the startup type of a Windows service. Continue?',
     // IMPROVEMENT: forward optional 3rd arg (StartupType) so the existing
     // service_repair.ps1 -Action set-startup path becomes reachable from UI.
     buildArgs: ([name, action, startupType]) => {
@@ -914,7 +916,7 @@ const ALLOWED_COMMANDS = {
     timeout: 1800000,
     streamChannel: 'care-out',
     confirmationRequired: true,
-    confirmationMessage: 'IRREVERSIBLE: Component Store cleanup karega aur superseded Windows packages permanently delete karega. 20-30 min lag sakte hain. Continue?',
+    confirmationMessage: 'IRREVERSIBLE: This will clean up the Component Store and permanently delete superseded Windows packages. This may take 20-30 minutes. Continue?',
     buildArgs: () => ['-Action', 'cleanup']
   },
   'recycle-bin-cleanup': {
@@ -922,7 +924,7 @@ const ALLOWED_COMMANDS = {
     command: 'Clear-RecycleBin -Force -ErrorAction SilentlyContinue; Write-Output "Recycle Bin cleared."',
     timeout: 30000,
     confirmationRequired: true,
-    confirmationMessage: 'Recycle Bin permanently empty karega. Continue?'
+    confirmationMessage: 'This will permanently empty the Recycle Bin. Continue?'
   },
   // ============================================================
   // SMART REPAIR - new repair commands (no duplicates of existing).
@@ -1631,6 +1633,571 @@ const ALLOWED_COMMANDS = {
         args.push('-Target', target);
       }
       return args;
+    }
+  },
+
+  // ============================================================
+  // SURGICAL UNINSTALLER MODULE (Feature 1)
+  // Point-in-time snapshot + diff approach (NOT always-on FileSystemWatcher,
+  // which is unreliable on Windows). See Brain.md Phase 1, Feature 1.
+  // ============================================================
+  'run-surgical-tool': {
+    type: 'script',
+    script: 'surgical_uninstaller.ps1',
+    timeout: 600000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'Surgical Uninstaller will modify installed software and remove leftover files/registry. Continue?',
+    buildArgs: (rawArgs) => {
+      const [action, snapId, appKey, displayName, depth] = Array.isArray(rawArgs) ? rawArgs : [];
+      const allowed = ['take-snapshot', 'compute-diff', 'scan-orphans', 'surgical-uninstall', 'get-footprint'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid surgical-tool action: ' + a);
+      const args = ['-Action', a];
+
+      // SnapshotId: strict format (snap_<digits>_<alnum>)
+      if (snapId !== undefined && snapId !== null && snapId !== '') {
+        if (typeof snapId !== 'string' || !/^snap_[A-Za-z0-9_]+$/.test(snapId) || snapId.length > 100) {
+          throw new Error('Invalid snapshot id format.');
+        }
+        args.push('-SnapshotId', snapId);
+      }
+
+      // AppKey: registry PSChildName (GUIDs or app names with limited charset)
+      if (appKey !== undefined && appKey !== null && appKey !== '') {
+        if (typeof appKey !== 'string' || appKey.length > 300 || appKey.includes('\0') || appKey.match(/[<>|"`$]/)) {
+          throw new Error('Invalid app key.');
+        }
+        args.push('-AppKey', appKey);
+      }
+
+      // DisplayName: human-readable name for orphan matching
+      if (displayName !== undefined && displayName !== null && displayName !== '') {
+        if (typeof displayName !== 'string' || displayName.length > 300 || displayName.includes('\0')) {
+          throw new Error('Invalid display name.');
+        }
+        args.push('-DisplayName', displayName);
+      }
+
+      // Depth: optional integer 1-5
+      if (depth !== undefined && depth !== null && depth !== '') {
+        const d = parseInt(depth, 10);
+        if (isNaN(d) || d < 1 || d > 5) throw new Error('Depth must be integer 1-5.');
+        args.push('-Depth', String(d));
+      }
+      return args;
+    }
+  },
+
+  // ============================================================
+  // SMART WORKSPACE AUTOMATION MODULE (Feature 2)
+  // Context-aware profiles: launch apps, kill apps, Focus Assist,
+  // power plan, WU pause. Trigger-based activation handled in main.js
+  // (lightweight polling - see workspaceStore + triggerPoller).
+  // ============================================================
+  'run-workspace-tool': {
+    type: 'script',
+    script: 'workspace_automation.ps1',
+    timeout: 60000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'Workspace Automation will change power plan, Focus Assist, and/or app processes on your PC. Continue?',
+    buildArgs: (rawArgs) => {
+      const [action, profileJson] = Array.isArray(rawArgs) ? rawArgs : [];
+      const allowed = ['get-current-state', 'apply-profile', 'restore-profile', 'launch-apps', 'kill-apps'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid workspace-tool action: ' + a);
+      const args = ['-Action', a];
+
+      if (profileJson !== undefined && profileJson !== null && profileJson !== '') {
+        if (typeof profileJson !== 'string' || profileJson.length > 100000) {
+          throw new Error('Invalid profile JSON (too long or non-string).');
+        }
+        if (profileJson.includes('\0')) throw new Error('Null bytes not allowed in profile JSON.');
+        // Validate it parses as JSON
+        try { JSON.parse(profileJson); } catch (_) {
+          throw new Error('Profile JSON failed to parse.');
+        }
+        args.push('-ProfileJson', profileJson);
+      }
+      return args;
+    }
+  },
+
+  // ============================================================
+  // GOD MODE TWEAKER MODULE (Feature 3)
+  // Generic registry-tweak engine. Catalog (tweak definitions) lives
+  // in electron/tweakerStore.js. PS script just does safe reg backup/apply/undo.
+  // ============================================================
+  'run-tweaker-tool': {
+    type: 'script',
+    script: 'god_mode_tweaker.ps1',
+    timeout: 30000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'This will modify the Windows registry. SolasCare backs up the prior value automatically (1-click Undo available). Continue?',
+    buildArgs: (rawArgs) => {
+      const [action, backupId, regKey, valueName, valueType, valueData] = Array.isArray(rawArgs) ? rawArgs : [];
+      const allowed = ['backup-value', 'apply-value', 'undo-value', 'list-backups', 'delete-backup'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid tweaker-tool action: ' + a);
+      const args = ['-Action', a];
+
+      if (backupId !== undefined && backupId !== null && backupId !== '') {
+        if (typeof backupId !== 'string' || !/^[A-Za-z0-9_\-]{1,200}$/.test(backupId)) {
+          throw new Error('Invalid BackupId.');
+        }
+        args.push('-BackupId', backupId);
+      }
+
+      if (regKey !== undefined && regKey !== null && regKey !== '') {
+        if (typeof regKey !== 'string' || regKey.length > 1000 || regKey.includes('\0') ||
+            regKey.match(/[<>|"`$;]/) || regKey.includes('..')) {
+          throw new Error('Invalid registry key (blocked chars).');
+        }
+        // Must start with allowed hive prefix
+        if (!/^(HKLM|HKCU|HKCR|HKU|HKCC):\\/.test(regKey)) {
+          throw new Error('Registry key must start with HKLM:\\, HKCU:\\, HKCR:\\, HKU:\\, or HKCC:\\');
+        }
+        args.push('-RegKey', regKey);
+      }
+
+      if (valueName !== undefined && valueName !== null && valueName !== '') {
+        if (typeof valueName !== 'string' || valueName.length > 500 || valueName.includes('\0')) {
+          throw new Error('Invalid value name.');
+        }
+        args.push('-ValueName', valueName);
+      }
+
+      if (valueType !== undefined && valueType !== null && valueType !== '') {
+        const allowedTypes = ['REG_DWORD', 'REG_SZ', 'REG_QWORD', 'REG_EXPAND_SZ', 'REG_MULTI_SZ'];
+        if (!allowedTypes.includes(String(valueType))) {
+          throw new Error('Invalid value type.');
+        }
+        args.push('-ValueType', String(valueType));
+      }
+
+      if (valueData !== undefined && valueData !== null && valueData !== '') {
+        if (typeof valueData !== 'string' || valueData.length > 10000 || valueData.includes('\0')) {
+          throw new Error('Invalid value data.');
+        }
+        args.push('-ValueData', String(valueData));
+      }
+
+      return args;
+    }
+  },
+
+  // ============================================================
+  // SOFTWARE FORGE MODULE (Feature 4)
+  // Silent batch install via Winget + bloatware terminator (Get-AppxPackage)
+  // + driver rollback (uses existing driver_backup.ps1 history).
+  // Catalog lives in electron/forgeStore.js.
+  // ============================================================
+  'run-forge-tool': {
+    type: 'script',
+    script: 'software_forge.ps1',
+    timeout: 600000,  // batch installs can take 10+ minutes
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'Software Forge will install / remove software and may modify your system. Continue?',
+    buildArgs: (rawArgs) => {
+      const [action, jsonArg] = Array.isArray(rawArgs) ? rawArgs : [];
+      const allowed = ['list-catalog', 'install-selected', 'list-bloatware',
+                       'remove-bloatware', 'update-all', 'list-driver-backups', 'rollback-driver'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid forge-tool action: ' + a);
+      const args = ['-Action', a];
+
+      if (jsonArg !== undefined && jsonArg !== null && jsonArg !== '') {
+        if (typeof jsonArg !== 'string' || jsonArg.length > 100000 || jsonArg.includes('\0')) {
+          throw new Error('Invalid JSON arg.');
+        }
+        try { JSON.parse(jsonArg); } catch (_) {
+          throw new Error('JSON arg failed to parse.');
+        }
+        args.push('-JsonArg', jsonArg);
+      }
+      return args;
+    }
+  },
+
+  // ============================================================
+  // PRIVACY BLACKHOLE MODULE (Feature 5)
+  // Hybrid approach: HOSTS + firewall + GPO. Curated blocklist lives
+  // in electron/privacyStore.js (JS); PS script just applies safe ops.
+  // ============================================================
+  'run-privacy-tool': {
+    type: 'script',
+    script: 'privacy_blackhole.ps1',
+    timeout: 120000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'Privacy Blackhole will modify the HOSTS file, add firewall rules, and change Group Policy registry keys. A backup is created for 1-click undo. Continue?',
+    buildArgs: (rawArgs) => {
+      const [action, jsonArg] = Array.isArray(rawArgs) ? rawArgs : [];
+      const allowed = ['get-status', 'apply-blocklist', 'remove-blocklist', 'count-blocked-today'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid privacy-tool action: ' + a);
+      const args = ['-Action', a];
+
+      if (jsonArg !== undefined && jsonArg !== null && jsonArg !== '') {
+        if (typeof jsonArg !== 'string' || jsonArg.length > 200000 || jsonArg.includes('\0')) {
+          throw new Error('Invalid JSON arg.');
+        }
+        // Validate it parses
+        try { JSON.parse(jsonArg); } catch (_) {
+          throw new Error('JSON arg failed to parse.');
+        }
+        // Additional: if it's an array of domains, each must match safe pattern
+        const parsed = JSON.parse(jsonArg);
+        if (Array.isArray(parsed)) {
+          for (const d of parsed) {
+            if (typeof d !== 'string' || d.length > 300 || !/^[A-Za-z0-9.\-_]+$/.test(d)) {
+              throw new Error('Invalid domain in blocklist: ' + String(d).slice(0, 50));
+            }
+          }
+        }
+        args.push('-JsonArg', jsonArg);
+      }
+      return args;
+    }
+  },
+
+  // ============================================================
+  // SOLAS VAULT MODULE (Feature 6)
+  // VHD + BitLocker + auto-mount/unmount. Vault registry lives in
+  // electron/vaultStore.js. PS script does diskpart/manage-bde ops.
+  // ============================================================
+  'run-vault-tool': {
+    type: 'script',
+    script: 'solas_vault.ps1',
+    timeout: 300000,  // VHD creation + BitLocker init can take 1-5 min
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'Solas Vault will create/mount/unmount VHD images and may modify BitLocker state. Continue?',
+    buildArgs: (rawArgs) => {
+      const [action, vaultId, vaultPath, password, sizeMB] = Array.isArray(rawArgs) ? rawArgs : [];
+      const allowed = ['create-vault', 'mount-vault', 'unmount-vault', 'list-vaults', 'delete-vault', 'get-activity-log'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid vault-tool action: ' + a);
+      const args = ['-Action', a];
+
+      if (vaultId !== undefined && vaultId !== null && vaultId !== '') {
+        if (typeof vaultId !== 'string' || !/^vault_[A-Za-z0-9_\-]+$/.test(vaultId) || vaultId.length > 200) {
+          throw new Error('Invalid vault id.');
+        }
+        args.push('-VaultId', vaultId);
+      }
+
+      if (vaultPath !== undefined && vaultPath !== null && vaultPath !== '') {
+        if (typeof vaultPath !== 'string' || vaultPath.length > 1000 || vaultPath.includes('\0') ||
+            vaultPath.match(/[<>|"`$;]/) || vaultPath.includes('..')) {
+          throw new Error('Invalid vault path.');
+        }
+        if (!/\.(vhd|vhdx)$/i.test(vaultPath)) {
+          throw new Error('Vault path must end in .vhd or .vhdx');
+        }
+        args.push('-VaultPath', vaultPath);
+      }
+
+      if (password !== undefined && password !== null && password !== '') {
+        if (typeof password !== 'string' || password.length > 500 || password.includes('\0')) {
+          throw new Error('Invalid password.');
+        }
+        args.push('-Password', password);
+      }
+
+      if (sizeMB !== undefined && sizeMB !== null && sizeMB !== '') {
+        const s = parseInt(sizeMB, 10);
+        if (isNaN(s) || s < 100 || s > 1024 * 1024 * 2) {
+          throw new Error('Size must be 100MB - 2TB.');
+        }
+        args.push('-SizeMB', String(s));
+      }
+      return args;
+    }
+  },
+
+  // ============================================================
+  // MICRO-SNAPSHOTS MODULE (Feature 7)
+  // Uses Windows System Restore API (safer than raw VSS + BCD).
+  // Retention policy + history live in electron/snapshotStore.js.
+  // ============================================================
+  'run-snapshot-tool': {
+    type: 'script',
+    script: 'micro_snapshots.ps1',
+    timeout: 120000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'Micro-Snapshots will create / restore / delete Windows System Restore points. Continue?',
+    buildArgs: (rawArgs) => {
+      const [action, snapshotSeq, description, triggerReason] = Array.isArray(rawArgs) ? rawArgs : [];
+      const allowed = ['create-snapshot', 'list-snapshots', 'restore-snapshot',
+                       'delete-snapshot', 'get-disk-usage', 'enable-system-restore'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid snapshot-tool action: ' + a);
+      const args = ['-Action', a];
+
+      if (snapshotSeq !== undefined && snapshotSeq !== null && snapshotSeq !== '') {
+        const s = String(snapshotSeq);
+        if (!/^\d{1,20}$/.test(s)) throw new Error('Invalid snapshot sequence number.');
+        args.push('-SnapshotSeq', s);
+      }
+
+      if (description !== undefined && description !== null && description !== '') {
+        if (typeof description !== 'string' || description.length > 500 || description.includes('\0') ||
+            description.match(/[<>|"`$]/)) {
+          throw new Error('Invalid description.');
+        }
+        args.push('-Description', description);
+      }
+
+      if (triggerReason !== undefined && triggerReason !== null && triggerReason !== '') {
+        const validReasons = ['manual', 'pre-install', 'pre-tweak', 'scheduled', 'pre-uninstall'];
+        if (!validReasons.includes(String(triggerReason))) {
+          throw new Error('Invalid trigger reason.');
+        }
+        args.push('-TriggerReason', String(triggerReason));
+      }
+      return args;
+    }
+  },
+
+  // ============================================================
+  // PC CLONE MODULE (Feature 8)
+  // Export apps (winget) + Wi-Fi profiles + registry tweaks to an
+  // AES-256 encrypted .solasclone file. Import restores on new PC.
+  // ============================================================
+  'run-clone-tool': {
+    type: 'script',
+    script: 'pc_clone.ps1',
+    timeout: 600000,  // winget export + import can take many minutes
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'PC Clone will export/import system configuration. Export is read-only. Import may install software. Continue?',
+    buildArgs: (rawArgs) => {
+      const [action, exportPath, jsonArg] = Array.isArray(rawArgs) ? rawArgs : [];
+      const allowed = ['get-exportable-items', 'export-clone', 'import-clone'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid clone-tool action: ' + a);
+      const args = ['-Action', a];
+
+      if (exportPath !== undefined && exportPath !== null && exportPath !== '') {
+        if (typeof exportPath !== 'string' || exportPath.length > 1000 || exportPath.includes('\0') ||
+            exportPath.match(/[<>|"`$;]/) || exportPath.includes('..')) {
+          throw new Error('Invalid export path.');
+        }
+        // For export-clone: must end in .solasclone
+        // For import-clone: must end in .json (decrypted temp file)
+        if (a === 'export-clone') {
+          if (!/\.solasclone$/i.test(exportPath)) {
+            throw new Error('Export path must end in .solasclone');
+          }
+        } else if (a === 'import-clone') {
+          if (!/\.json$/i.test(exportPath)) {
+            throw new Error('Import path must end in .json (decrypted temp file)');
+          }
+        }
+        args.push('-ExportPath', exportPath);
+      }
+
+      if (jsonArg !== undefined && jsonArg !== null && jsonArg !== '') {
+        if (typeof jsonArg !== 'string' || jsonArg.length > 100000 || jsonArg.includes('\0')) {
+          throw new Error('Invalid JSON arg.');
+        }
+        try { JSON.parse(jsonArg); } catch (_) {
+          throw new Error('JSON arg failed to parse.');
+        }
+        args.push('-JsonArg', jsonArg);
+      }
+      return args;
+    }
+  },
+
+  // ============================================================
+  // PREDICTIVE MAINTENANCE MODULE (Feature 9)
+  // Threshold-based alerts (not predictive ML per senior-engineer critique).
+  // History + thresholds live in electron/healthStore.js. PS reads SMART/RAM/etc.
+  // ============================================================
+  'run-health-tool': {
+    type: 'script',
+    script: 'predictive_maintenance.ps1',
+    timeout: 60000,
+    streamChannel: 'care-out',
+    buildArgs: (rawArgs) => {
+      const [action] = Array.isArray(rawArgs) ? rawArgs : [];
+      const allowed = ['get-smart-data', 'get-ram-errors', 'get-cpu-temp',
+                       'get-fan-rpm', 'get-battery-health', 'compute-health-score'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid health-tool action: ' + a);
+      return ['-Action', a];
+    }
+  },
+
+  // ============================================================
+  // SOLAS SENTINEL MODULE (Feature 10)
+  // Background watchdog + auto-healing rules. Rules live in
+  // electron/sentinelStore.js (JS). PS reads system state + applies heal actions.
+  // ============================================================
+  'run-sentinel-tool': {
+    type: 'script',
+    script: 'solas_sentinel.ps1',
+    timeout: 120000,
+    streamChannel: 'care-out',
+    buildArgs: (rawArgs) => {
+      const [action, serviceName, actionArg] = Array.isArray(rawArgs) ? rawArgs : [];
+      const allowed = ['get-status', 'reset-network-adapter', 'restart-service',
+                       'kill-process', 'clear-print-spooler', 'flush-dns'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid sentinel-tool action: ' + a);
+      const args = ['-Action', a];
+
+      // serviceName: used by restart-service. Strict pattern.
+      if (serviceName !== undefined && serviceName !== null && serviceName !== '') {
+        if (typeof serviceName !== 'string' || !/^[A-Za-z0-9_\.\-]+$/.test(serviceName) || serviceName.length > 200) {
+          throw new Error('Invalid service name.');
+        }
+        args.push('-ServiceName', serviceName);
+      }
+
+      // actionArg: process name for kill-process, adapter name for reset-network
+      if (actionArg !== undefined && actionArg !== null && actionArg !== '') {
+        if (typeof actionArg !== 'string' || actionArg.length > 200 || actionArg.includes('\0') ||
+            actionArg.match(/[<>|"`$;]/) || actionArg.includes('..')) {
+          throw new Error('Invalid action arg.');
+        }
+        args.push('-ActionArg', actionArg);
+      }
+      return args;
+    }
+  },
+
+  // ============================================================
+  // SOLAS V-CACHE MODULE (Feature 11) — STRETCH GOAL
+  // RAM disk via ImDisk. Redirects browser caches for ~100x speedup.
+  // VOLATILE: contents LOST on reboot/crash — only redirect regeneratable caches.
+  // ============================================================
+  'run-vcache-tool': {
+    type: 'script',
+    script: 'v_cache.ps1',
+    timeout: 180000,  // ImDisk install can take a few minutes
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'V-Cache will create/remove a RAM disk or modify cache folder symlinks. RAM disk contents are LOST on reboot. Continue?',
+    buildArgs: (rawArgs) => {
+      const [action, driveLetter, sizeMB, cachePath, cacheLabel] = Array.isArray(rawArgs) ? rawArgs : [];
+      const allowed = ['check-imdisk', 'install-imdisk', 'create-ramdisk', 'remove-ramdisk',
+                       'get-status', 'redirect-cache', 'unredirect-cache', 'get-recommendations'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid vcache-tool action: ' + a);
+      const args = ['-Action', a];
+
+      // driveLetter: single uppercase letter A-Z, not A/B/C
+      if (driveLetter !== undefined && driveLetter !== null && driveLetter !== '') {
+        if (typeof driveLetter !== 'string' || !/^[A-Z]$/.test(driveLetter) ||
+            ['A','B','C'].includes(driveLetter)) {
+          throw new Error('Invalid drive letter (must be single letter A-Z, not A/B/C).');
+        }
+        args.push('-DriveLetter', driveLetter);
+      }
+
+      // sizeMB: 100-32768
+      if (sizeMB !== undefined && sizeMB !== null && sizeMB !== '') {
+        const s = parseInt(sizeMB, 10);
+        if (isNaN(s) || s < 100 || s > 32768) {
+          throw new Error('Size must be 100MB - 32GB.');
+        }
+        args.push('-SizeMB', String(s));
+      }
+
+      // cachePath: filesystem path (strict safety)
+      if (cachePath !== undefined && cachePath !== null && cachePath !== '') {
+        if (typeof cachePath !== 'string' || cachePath.length > 1000 || cachePath.includes('\0') ||
+            cachePath.match(/[<>|"`$;]/) || cachePath.includes('..')) {
+          throw new Error('Invalid cache path.');
+        }
+        args.push('-CachePath', cachePath);
+      }
+
+      // cacheLabel: friendly label (1-100 chars, no shell metacharacters)
+      if (cacheLabel !== undefined && cacheLabel !== null && cacheLabel !== '') {
+        if (typeof cacheLabel !== 'string' || cacheLabel.length === 0 || cacheLabel.length > 100 ||
+            cacheLabel.includes('\0') || cacheLabel.match(/[<>|"`$;]/)) {
+          throw new Error('Invalid cache label.');
+        }
+        args.push('-CacheLabel', cacheLabel);
+      }
+      return args;
+    }
+  },
+
+  // ============================================================
+  // SEAMLESS SANDBOX MODULE (Feature 12) — STRETCH GOAL
+  // Wraps Windows Sandbox (built-in Pro/Enterprise). Drag-drop UI for
+  // safe file execution. Home edition NOT supported — clearly communicated.
+  // ============================================================
+  'run-sandbox-tool': {
+    type: 'script',
+    script: 'seamless_sandbox.ps1',
+    timeout: 120000,
+    streamChannel: 'care-out',
+    confirmationRequired: true,
+    confirmationMessage: 'Sandbox will generate a .wsb config and launch Windows Sandbox (isolated environment). Continue?',
+    buildArgs: (rawArgs) => {
+      const [action, wsbPath, templateId, hostFolderPath, commandToRun] = Array.isArray(rawArgs) ? rawArgs : [];
+      const allowed = ['check-availability', 'enable-feature', 'list-templates',
+                       'generate-wsb', 'launch-sandbox', 'parse-activity-log'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid sandbox-tool action: ' + a);
+      const args = ['-Action', a];
+
+      if (wsbPath !== undefined && wsbPath !== null && wsbPath !== '') {
+        if (typeof wsbPath !== 'string' || wsbPath.length > 1000 || wsbPath.includes('\0') ||
+            wsbPath.match(/[<>|"`$;]/) || wsbPath.includes('..') || !/\.wsb$/i.test(wsbPath)) {
+          throw new Error('Invalid WSB path (must end in .wsb).');
+        }
+        args.push('-WsbPath', wsbPath);
+      }
+      if (templateId !== undefined && templateId !== null && templateId !== '') {
+        if (typeof templateId !== 'string' || !/^[a-z0-9\-]+$/.test(templateId) || templateId.length > 100) {
+          throw new Error('Invalid template id.');
+        }
+        args.push('-TemplateId', templateId);
+      }
+      if (hostFolderPath !== undefined && hostFolderPath !== null && hostFolderPath !== '') {
+        if (typeof hostFolderPath !== 'string' || hostFolderPath.length > 1000 || hostFolderPath.includes('\0') ||
+            hostFolderPath.match(/[<>|"`$;]/) || hostFolderPath.includes('..')) {
+          throw new Error('Invalid host folder path.');
+        }
+        args.push('-HostFolderPath', hostFolderPath);
+      }
+      if (commandToRun !== undefined && commandToRun !== null && commandToRun !== '') {
+        if (typeof commandToRun !== 'string' || commandToRun.length > 1000 || commandToRun.includes('\0') ||
+            commandToRun.match(/[<>|"`$;]/)) {
+          throw new Error('Invalid command.');
+        }
+        args.push('-CommandToRun', commandToRun);
+      }
+      return args;
+    }
+  },
+
+  // ============================================================
+  // NETWORK DIAGNOSTICS MODULE (Missing Sub-Feature)
+  // Speed test (Cloudflare), DNS response check, active connections.
+  // ============================================================
+  'run-netdiag-tool': {
+    type: 'script',
+    script: 'network_diagnostics.ps1',
+    timeout: 120000,
+    streamChannel: 'care-out',
+    buildArgs: (rawArgs) => {
+      const [action] = Array.isArray(rawArgs) ? rawArgs : [];
+      const allowed = ['speed-test', 'dns-check', 'active-connections'];
+      const a = String(action || '').toLowerCase();
+      if (!allowed.includes(a)) throw new Error('Invalid netdiag-tool action: ' + a);
+      return ['-Action', a];
     }
   },
 

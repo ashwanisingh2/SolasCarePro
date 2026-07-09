@@ -3,9 +3,19 @@ import {
   LayoutDashboard, Wrench, MonitorCheck, Cpu, CircuitBoard, Package, Globe,
   Sparkles, Settings2, Database, Info, Activity, Bot, LifeBuoy, Zap, Settings,
   Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope, Brain, FileText,
-  Trash2, Scissors, Copy, FileX, Unlock, Clock, Wifi, Shield, ClipboardList, Loader2, Terminal, Skull, ChevronDown, ChevronRight
+  Trash2, Scissors, Copy, FileX, Unlock, Clock, Wifi, Shield, ClipboardList, Loader2, Terminal, Skull, ChevronDown, ChevronRight, Crosshair, Briefcase, SlidersHorizontal, Hammer, ShieldOff, Lock, History, GitCompareArrows, HeartPulse, Radar, Gauge, Box
 } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ProFeatureGate } from './components/UpgradeModal';
+
+// Map feature tab IDs to Pro feature gate IDs. Only Pro-only features are listed.
+const PRO_FEATURE_MAP = {
+  'solas-vault':               { featureId: 'vault', label: 'Solas Vault' },
+  'solas-sentinel':            { featureId: 'sentinel', label: 'Solas Sentinel' },
+  'micro-snapshots':           { featureId: 'snapshots', label: 'Micro-Snapshots' },
+  'pc-clone':                  { featureId: 'pc-clone', label: 'PC Clone' },
+  'predictive-maintenance':    { featureId: 'predictive-maintenance', label: 'Predictive Maintenance' }
+};
 
 const UnifiedDashboard = React.lazy(() => import('./components/UnifiedDashboard'));
 const PerformanceTuning = React.lazy(() => import('./components/PerformanceTuning'));
@@ -37,6 +47,42 @@ const WindowsTweaks = React.lazy(() => import('./components/WindowsTweaks'));
 const HostsEditor = React.lazy(() => import('./components/HostsEditor'));
 const Onboarding = React.lazy(() => import('./components/Onboarding'));
 
+// Phase 1 - Feature 1: Surgical Uninstaller (snapshot + diff + surgical cleanup)
+const SurgicalUninstaller = React.lazy(() => import('./components/SurgicalUninstaller'));
+
+// Phase 1 - Feature 2: Smart Workspace Automation (profiles + triggers)
+const WorkspaceAutomation = React.lazy(() => import('./components/WorkspaceAutomation'));
+
+// Phase 2 - Feature 3: God Mode Visual Tweaker (cards + micro-snapshots + undo)
+const GodModeTweaker = React.lazy(() => import('./components/GodModeTweaker'));
+
+// Phase 2 - Feature 4: Software Forge (silent installer + bloatware + driver rollback)
+const SoftwareForge = React.lazy(() => import('./components/SoftwareForge'));
+
+// Phase 3 - Feature 5: Privacy Blackhole (HOSTS + firewall + GPO)
+const PrivacyBlackhole = React.lazy(() => import('./components/PrivacyBlackhole'));
+
+// Phase 3 - Feature 6: Solas Vault (VHD + BitLocker + auto-unmount)
+const SolasVault = React.lazy(() => import('./components/SolasVault'));
+
+// Phase 4 - Feature 7: Micro-Snapshots (System Restore + retention policy)
+const MicroSnapshots = React.lazy(() => import('./components/MicroSnapshots'));
+
+// Phase 4 - Feature 8: One-Click PC Clone (AES-256 encrypted migration)
+const PcClone = React.lazy(() => import('./components/PcClone'));
+
+// Phase 5 - Feature 9: Predictive Maintenance (hardware health + trend graphs)
+const PredictiveMaintenance = React.lazy(() => import('./components/PredictiveMaintenance'));
+
+// Phase 5 - Feature 10: Solas Sentinel (background watchdog + auto-heal rules)
+const SolasSentinel = React.lazy(() => import('./components/SolasSentinel'));
+
+// Phase 6 - Feature 11: Solas V-Cache (RAM disk via ImDisk) — STRETCH GOAL
+const VCache = React.lazy(() => import('./components/VCache'));
+
+// Phase 6 - Feature 12: Seamless Sandbox (Windows Sandbox wrapper) — STRETCH GOAL
+const SeamlessSandbox = React.lazy(() => import('./components/SeamlessSandbox'));
+
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -48,7 +94,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isWindowActive, setIsWindowActive] = useState(true);
   const [visitedTabs, setVisitedTabs] = useState(['dashboard']);
-  const [expandedCats, setExpandedCats] = useState({ 'Main': true, 'Core Tools': true, 'Logs & Settings': true, 'System Tools': true, 'Cleanup & Privacy': true, 'Extra Tools': true });
+  const [expandedCats, setExpandedCats] = useState({ 'Main': true, 'Core Tools': true, 'Logs & Settings': true, 'System Tools': true, 'Cleanup & Privacy': true, 'Ironclad Defense': true, 'Time Machine': true, 'Always-On Intelligence': true, 'Stretch Goals': true, 'Extra Tools': true });
 
   // Load persistence theme and startup init
   useEffect(() => {
@@ -167,15 +213,47 @@ export default function App() {
       ]
     },
     {
+      label: 'Ironclad Defense',
+      items: [
+        { id: 'privacy-blackhole', label: 'Privacy Blackhole', icon: ShieldOff,      component: PrivacyBlackhole },
+        { id: 'solas-vault',       label: 'Solas Vault',       icon: Lock,           component: SolasVault }
+      ]
+    },
+    {
+      label: 'Time Machine',
+      items: [
+        { id: 'micro-snapshots',   label: 'Micro-Snapshots',   icon: History,        component: MicroSnapshots },
+        { id: 'pc-clone',          label: 'PC Clone',          icon: Copy,           component: PcClone }
+      ]
+    },
+    {
+      label: 'Always-On Intelligence',
+      items: [
+        { id: 'predictive-maintenance', label: 'Predictive Maintenance', icon: HeartPulse, component: PredictiveMaintenance },
+        { id: 'solas-sentinel',         label: 'Solas Sentinel',         icon: Radar,     component: SolasSentinel }
+      ]
+    },
+    {
+      label: 'Stretch Goals',
+      items: [
+        { id: 'v-cache',          label: 'Solas V-Cache',  icon: Gauge, component: VCache },
+        { id: 'seamless-sandbox', label: 'Seamless Sandbox', icon: Box, component: SeamlessSandbox }
+      ]
+    },
+    {
       label: 'Extra Tools',
       items: [
-        { id: 'command-hub',       label: 'Command Hub',       icon: Terminal,       component: CommandHub },
-        { id: 'windows-tweaks',    label: 'Windows God Mode',  icon: ShieldAlert,    component: WindowsTweaks },
-        { id: 'force-uninstaller', label: 'Force Uninstaller', icon: Trash2,         component: ForceUninstaller },
-        { id: 'file-shredder',     label: 'File Shredder',     icon: Scissors,       component: FileShredder },
-        { id: 'file-unlocker',     label: 'File Unlocker',     icon: Unlock,         component: FileUnlocker },
-        { id: 'duplicate-finder',  label: 'Duplicate Finder',  icon: Copy,           component: DuplicateFinder },
-        { id: 'broken-shortcuts',  label: 'Broken Shortcuts',  icon: FileX,          component: BrokenShortcuts }
+        { id: 'command-hub',          label: 'Command Hub',         icon: Terminal,       component: CommandHub },
+        { id: 'windows-tweaks',       label: 'Windows God Mode',    icon: ShieldAlert,    component: WindowsTweaks },
+        { id: 'god-mode-tweaker',     label: 'God Mode Tweaker',    icon: SlidersHorizontal, component: GodModeTweaker },
+        { id: 'software-forge',       label: 'Software Forge',      icon: Hammer,         component: SoftwareForge },
+        { id: 'surgical-uninstaller', label: 'Surgical Uninstaller', icon: Crosshair,     component: SurgicalUninstaller },
+        { id: 'workspace-automation', label: 'Workspace Automation', icon: Briefcase,     component: WorkspaceAutomation },
+        { id: 'force-uninstaller',    label: 'Force Uninstaller',   icon: Trash2,         component: ForceUninstaller },
+        { id: 'file-shredder',        label: 'File Shredder',       icon: Scissors,       component: FileShredder },
+        { id: 'file-unlocker',        label: 'File Unlocker',       icon: Unlock,         component: FileUnlocker },
+        { id: 'duplicate-finder',     label: 'Duplicate Finder',    icon: Copy,           component: DuplicateFinder },
+        { id: 'broken-shortcuts',     label: 'Broken Shortcuts',    icon: FileX,          component: BrokenShortcuts }
       ]
     }
   ];
@@ -222,7 +300,7 @@ export default function App() {
               </div>
             </div>
             <span className="bg-brand-violet text-white px-2 py-0.5 rounded text-[10px] font-black">
-              v4.4.0
+              v5.0.0
             </span>
           </div>
 
@@ -288,7 +366,7 @@ export default function App() {
             </div>
             </div>
             <div className="mt-auto px-4 pb-6">
-            <p className="hidden md:block text-[10px] text-slate-500 text-center mt-3 font-medium">SolasCare Pro v4.4.0</p>
+            <p className="hidden md:block text-[10px] text-slate-500 text-center mt-3 font-medium">SolasCare Pro v5.0.0</p>
           </div>
         </div>
       </aside>
@@ -316,20 +394,28 @@ export default function App() {
               const isVisited = visitedTabs.includes(item.id);
               const isActive = activeTab === item.id;
               if (!isVisited) return null;
+              const proGate = PRO_FEATURE_MAP[item.id];
+              const renderContent = () => (
+                item.id === 'dashboard' ? (
+                  <Component setActiveTab={handleSetActiveTab} isWindowActive={isWindowActive} />
+                ) : item.id === 'network' ? (
+                  <Component isWindowActive={isWindowActive} />
+                ) : item.id === 'settings' ? (
+                  <Component theme={theme} setTheme={handleSetTheme} />
+                ) : (
+                  <Component />
+                )
+              );
               return (
-                <div 
-                  key={item.id} 
+                <div
+                  key={item.id}
                   className={isActive ? "h-full w-full" : "hidden"}
                 >
-                  {item.id === 'dashboard' ? (
-                    <Component setActiveTab={handleSetActiveTab} isWindowActive={isWindowActive} />
-                  ) : item.id === 'network' ? (
-                    <Component isWindowActive={isWindowActive} />
-                  ) : item.id === 'settings' ? (
-                    <Component theme={theme} setTheme={handleSetTheme} />
-                  ) : (
-                    <Component />
-                  )}
+                  {proGate ? (
+                    <ProFeatureGate featureId={proGate.featureId} fallbackLabel={proGate.label}>
+                      {renderContent()}
+                    </ProFeatureGate>
+                  ) : renderContent()}
                 </div>
               );
             })}

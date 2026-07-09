@@ -5,14 +5,17 @@ import './index.css';
 import { NotificationProvider } from './context/NotificationContext';
 import { SystemMetricsProvider } from './context/SystemMetricsContext';
 import { ConfirmProvider } from './components/shared/ConfirmModal';
+import { LicenseProvider } from './components/UpgradeModal';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <NotificationProvider>
       <SystemMetricsProvider>
-        <ConfirmProvider>
-          <App />
-        </ConfirmProvider>
+        <LicenseProvider>
+          <ConfirmProvider>
+            <App />
+          </ConfirmProvider>
+        </LicenseProvider>
       </SystemMetricsProvider>
     </NotificationProvider>
   </React.StrictMode>,
