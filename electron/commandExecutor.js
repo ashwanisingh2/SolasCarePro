@@ -267,11 +267,24 @@ const ALLOWED_COMMANDS = {
     confirmationMessage: 'This will apply a Windows Registry tweak. Continue?',
     buildCommand: ([tweakId, enable]) => {
       const isEnable = enable === true || enable === 'true';
+      // isEnable === true means "apply the tweak described by the UI label"
+      // (e.g. classic menu ON, telemetry OFF). The false branch restores the
+      // Windows default. Restore paths use Remove-Item* -ErrorAction
+      // SilentlyContinue so restoring a tweak that was never applied is a no-op.
+      const clsid = 'HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}';
       const tweaks = {
-        'context-menu': isEnable ? 'reg delete "HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}" /f; Stop-Process -Name explorer -Force' : 'reg add "HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32" /f /ve; Stop-Process -Name explorer -Force',
-        'telemetry': isEnable ? 'reg add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection" /v AllowTelemetry /t REG_DWORD /d 3 /f' : 'reg add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f',
-        'web-search': isEnable ? 'reg delete "HKCU\\Software\\Policies\\Microsoft\\Windows\\Explorer" /v DisableSearchBoxSuggestions /f' : 'reg add "HKCU\\Software\\Policies\\Microsoft\\Windows\\Explorer" /v DisableSearchBoxSuggestions /t REG_DWORD /d 1 /f',
-        'lock-ads': isEnable ? 'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager" /v RotatingLockScreenEnabled /t REG_DWORD /d 1 /f' : 'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager" /v RotatingLockScreenEnabled /t REG_DWORD /d 0 /f'
+        'context-menu': isEnable
+          ? `New-Item -Path '${clsid}\\InprocServer32' -Force | Set-ItemProperty -Name '(default)' -Value ''; Stop-Process -Name explorer -Force`
+          : `Remove-Item -Path '${clsid}' -Recurse -Force -ErrorAction SilentlyContinue; Stop-Process -Name explorer -Force`,
+        'telemetry': isEnable
+          ? "reg add 'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection' /v AllowTelemetry /t REG_DWORD /d 0 /f"
+          : "reg add 'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection' /v AllowTelemetry /t REG_DWORD /d 3 /f",
+        'web-search': isEnable
+          ? "reg add 'HKCU\\Software\\Policies\\Microsoft\\Windows\\Explorer' /v DisableSearchBoxSuggestions /t REG_DWORD /d 1 /f"
+          : "Remove-ItemProperty -Path 'HKCU:\\Software\\Policies\\Microsoft\\Windows\\Explorer' -Name DisableSearchBoxSuggestions -Force -ErrorAction SilentlyContinue",
+        'lock-ads': isEnable
+          ? "reg add 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager' /v RotatingLockScreenEnabled /t REG_DWORD /d 0 /f"
+          : "reg add 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager' /v RotatingLockScreenEnabled /t REG_DWORD /d 1 /f"
       };
       if (!tweaks[tweakId]) throw new Error('Invalid tweak id');
       return tweaks[tweakId] + '; Write-Output "Tweak applied successfully."';
