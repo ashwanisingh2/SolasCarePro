@@ -841,6 +841,8 @@ ipcMain.handle('get-system-info', async () => {
     freeMemBytes,
     totalMemGB: Math.round(totalMemBytes / 1024 / 1024 / 1024 * 10) / 10,
     freeMemGB: Math.round(freeMemBytes / 1024 / 1024 / 1024 * 10) / 10,
+    // App version (read from package.json via Electron's app.getVersion())
+    appVersion: app.getVersion(),
   };
 });
 
@@ -2307,6 +2309,71 @@ function checkBackgroundScheduledTask() {
     writeLog('ERROR', 'Failed to locate check_task_status script: ' + e.message);
   }
 }
+
+// ─── App Update Checker ──────────────────────────────────────────────────────
+// Queries GitHub Releases API to check if a newer version is available.
+// Does NOT auto-download — user opens browser to download page themselves.
+// This is intentionally safe: no code signing required, no AV risk.
+ipcMain.handle('check-app-update', async () => {
+  const https = require('https');
+  // TODO: Replace with your actual GitHub repo slug once published
+  const REPO = 'SPTL-Solas/SolasCarePro';
+  return new Promise((resolve) => {
+    const options = {
+      hostname: 'api.github.com',
+      path: `/repos/${REPO}/releases/latest`,
+      headers: {
+        'User-Agent': 'SolasCarePro',
+        'Accept': 'application/vnd.github+json'
+      },
+      timeout: 8000
+    };
+    const req = https.get(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const release = JSON.parse(data);
+          // GitHub returns { message: 'Not Found' } when no releases exist yet
+          if (release.message) {
+            resolve({ available: false, current: app.getVersion(), error: 'no_releases' });
+            return;
+          }
+          const latestTag = (release.tag_name || '').replace(/^v/, '');
+          const current = app.getVersion();
+          // Simple string compare — works for semver if tags are consistent
+          const hasUpdate = latestTag.length > 0 && latestTag !== current;
+          resolve({
+            available: hasUpdate,
+            current,
+            latest: latestTag || current,
+            url: release.html_url || '',
+            notes: release.body ? release.body.slice(0, 400) : ''
+          });
+        } catch (e) {
+          resolve({ available: false, current: app.getVersion(), error: 'parse_error' });
+        }
+      });
+    });
+    req.on('error', () => {
+      resolve({ available: false, current: app.getVersion(), error: 'network' });
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ available: false, current: app.getVersion(), error: 'timeout' });
+    });
+  });
+});
+
+// Opens a GitHub URL in the default browser — allowlist enforced to prevent abuse.
+ipcMain.handle('open-external-url', async (event, url) => {
+  if (typeof url !== 'string') return;
+  if (!url.startsWith('https://github.com/')) {
+    writeLog('WARN', `Blocked open-external-url for non-GitHub URL: ${url}`);
+    return;
+  }
+  await shell.openExternal(url);
+});
 
 ipcMain.on('show-notification', (event, { title, body } = {}) => {
   if (typeof title !== 'string' || typeof body !== 'string') return;

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  BarChart3, Play, Pause, X,
-  Cpu, MemoryStick, MonitorSpeaker,
-  ShieldCheck, RefreshCw, ArrowRight, ArrowDown
+  BarChart3, Play, Pause,
+  Cpu, RefreshCw
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 
@@ -116,7 +115,9 @@ export default function StartupManager() {
           await window.api.runSystemCommand('toggle-startup-app', [app.Name, app.ApprovedPath, 'disable']);
         }
       } catch (e) {
-        console.error(e);
+        if (import.meta.env.DEV) {
+          console.error(e);
+        }
       }
     }
   };

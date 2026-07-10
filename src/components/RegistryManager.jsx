@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Download, Upload, Trash2, RefreshCw, Loader2, Calendar } from 'lucide-react';
+import { Database, Download, Upload, RefreshCw, Loader2, Calendar } from 'lucide-react';
 import { formatBytes, formatDate } from '../utils/formatters';
 import { useNotification } from '../context/NotificationContext';
 
@@ -36,8 +36,10 @@ export default function RegistryManager() {
         ]);
       }
     } catch (e) {
-      console.error(e);
-      addNotification('Registry Manager', 'Error loading backup listing: ' + e.message, 'error');
+      if (import.meta.env.DEV) {
+        console.error(e);
+      }
+      addNotification('Registry Error', e.message, 'error');
     } finally {
       setLoading(false);
     }

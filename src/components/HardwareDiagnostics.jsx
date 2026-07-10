@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Activity, ClipboardList, Clock, RefreshCw, Loader2, Play, AlertOctagon,
-  Cpu, HardDrive, Battery, Monitor, Zap, AlertTriangle, CheckCircle2, XCircle, Settings, MonitorPlay
+  Activity, ClipboardList, Loader2, Play, AlertOctagon,
+  Cpu, HardDrive, Battery, Monitor, Zap, AlertTriangle, Settings, MonitorPlay
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNotification } from '../context/NotificationContext';

@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
-  LayoutDashboard, Wrench, MonitorCheck, Cpu, CircuitBoard, Package, Globe,
-  Sparkles, Settings2, Database, Info, Activity, Bot, LifeBuoy, Zap, Settings,
-  Sun, Moon, ShieldCheck, ShieldAlert, RefreshCw, Stethoscope, Brain, FileText,
-  Trash2, Scissors, Copy, FileX, Unlock, Clock, Wifi, Shield, ClipboardList, Loader2, Terminal, Skull, ChevronDown, ChevronRight, Crosshair, Briefcase, SlidersHorizontal, Hammer, ShieldOff, Lock, History, GitCompareArrows, HeartPulse, Radar, Gauge, Box
+  LayoutDashboard, Cpu, CircuitBoard, Package, Globe, Settings2, Database, Info, Bot, Zap, Settings, ShieldCheck, ShieldAlert, RefreshCw, FileText,
+  Trash2, Scissors, Copy, FileX, Unlock, Clock, Wifi, Shield, ClipboardList, Loader2, Terminal, Skull, ChevronDown, ChevronRight, Crosshair, Briefcase, SlidersHorizontal, Hammer, ShieldOff, Lock, History, HeartPulse, Radar, Gauge, Box
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ProFeatureGate } from './components/UpgradeModal';
 
@@ -14,7 +13,9 @@ const PRO_FEATURE_MAP = {
   'solas-sentinel':            { featureId: 'sentinel', label: 'Solas Sentinel' },
   'micro-snapshots':           { featureId: 'snapshots', label: 'Micro-Snapshots' },
   'pc-clone':                  { featureId: 'pc-clone', label: 'PC Clone' },
-  'predictive-maintenance':    { featureId: 'predictive-maintenance', label: 'Predictive Maintenance' }
+  'predictive-maintenance':    { featureId: 'predictive-maintenance', label: 'Predictive Maintenance' },
+  'v-cache':                   { featureId: 'v-cache', label: 'Solas V-Cache (RAM Disk)' },
+  'seamless-sandbox':          { featureId: 'sandbox', label: 'Seamless Sandbox' }
 };
 
 const UnifiedDashboard = React.lazy(() => import('./components/UnifiedDashboard'));
@@ -94,7 +95,18 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isWindowActive, setIsWindowActive] = useState(true);
   const [visitedTabs, setVisitedTabs] = useState(['dashboard']);
-  const [expandedCats, setExpandedCats] = useState({ 'Main': true, 'Core Tools': true, 'Logs & Settings': true, 'System Tools': true, 'Cleanup & Privacy': true, 'Ironclad Defense': true, 'Time Machine': true, 'Always-On Intelligence': true, 'Stretch Goals': true, 'Extra Tools': true });
+  const [expandedCats, setExpandedCats] = useState({ 
+    'Dashboard': true, 
+    'Diagnostics & Health': true, 
+    'Performance & Drivers': true, 
+    'Software & Updates': false,
+    'Privacy & Security': true, 
+    'System Management': false,
+    'Backup & Recovery': false,
+    'Automation & Intelligence': false,
+    'Advanced Tools': false,
+    'Logs & Reports': true
+  });
 
   // Load persistence theme and startup init
   useEffect(() => {
@@ -167,93 +179,93 @@ export default function App() {
     setActiveTab(tabId);
   };
 
-  // Refactored navigation into structured categories for collapsible UI
+  // Refactored navigation — cleaner, priority-based, logical grouping
   const navigationCategories = [
     {
-      label: 'Main',
+      label: 'Dashboard',
       items: [
-        { id: 'dashboard',      label: 'Unified Dashboard',  icon: LayoutDashboard,  component: UnifiedDashboard }
+        { id: 'dashboard',      label: 'Control Center',     icon: LayoutDashboard,  component: UnifiedDashboard }
       ]
     },
     {
-      label: 'Core Tools',
+      label: 'Diagnostics & Health',
       items: [
-        { id: 'driver',         label: 'Drivers',            icon: Cpu,              component: DriverManager },
-        { id: 'hardware',       label: 'Hardware Diagnostics', icon: CircuitBoard,   component: HardwareDiagnostics },
-        { id: 'device-details', label: 'Device Details',     icon: Info,             component: DeviceDetails },
-        { id: 'performance',    label: 'Performance Tuning', icon: Zap,              component: PerformanceTuning },
-        { id: 'software',       label: 'Software Updater',   icon: Package,          component: SoftwareUpdater },
-        { id: 'ai-diagnostics', label: 'Solas Smart Diagnostics', icon: Bot,            component: AiDiagnostics }
+        { id: 'ai-diagnostics',        label: 'Smart Diagnostics',        icon: Bot,             component: AiDiagnostics },
+        { id: 'hardware',              label: 'Hardware Health',          icon: CircuitBoard,    component: HardwareDiagnostics },
+        { id: 'device-details',        label: 'Device Details',           icon: Info,            component: DeviceDetails },
+        { id: 'bsod-analyzer',         label: 'BSOD Analyzer',            icon: Skull,           component: BsodAnalyzer },
+        { id: 'predictive-maintenance', label: 'Predictive Maintenance',  icon: HeartPulse,      component: PredictiveMaintenance }
       ]
     },
     {
-      label: 'System Tools',
+      label: 'Performance & Drivers',
       items: [
-        { id: 'registry',       label: 'Registry',           icon: Database,         component: RegistryManager },
-        { id: 'services',       label: 'Services',           icon: Settings2,        component: ServiceManager },
-        { id: 'startup',        label: 'Startup Manager',    icon: Clock,            component: StartupManager },
-        { id: 'network',        label: 'Network Monitor',    icon: Wifi,             component: NetworkMonitor }
+        { id: 'performance',    label: 'Performance Boost',  icon: Zap,              component: PerformanceTuning },
+        { id: 'driver',         label: 'Driver Manager',     icon: Cpu,              component: DriverManager },
+        { id: 'startup',        label: 'Startup Control',    icon: Clock,            component: StartupManager },
+        { id: 'god-mode-tweaker', label: 'System Tweaker',   icon: SlidersHorizontal, component: GodModeTweaker }
       ]
     },
     {
-      label: 'Cleanup & Privacy',
+      label: 'Software & Updates',
       items: [
-        { id: 'privacy',        label: 'Privacy Cleaner',    icon: Shield,           component: PrivacyCleaner },
-        { id: 'browser',        label: 'Browser Repair',     icon: Globe,            component: BrowserRepair },
-        { id: 'hosts-editor',   label: 'Hosts Ad-Blocker',   icon: ShieldAlert,      component: HostsEditor }
+        { id: 'software',              label: 'Software Updater',         icon: Package,         component: SoftwareUpdater },
+        { id: 'software-forge',        label: 'Software Forge',           icon: Hammer,          component: SoftwareForge },
+        { id: 'surgical-uninstaller',  label: 'Surgical Uninstaller',     icon: Crosshair,       component: SurgicalUninstaller },
+        { id: 'force-uninstaller',     label: 'Force Uninstaller',        icon: Trash2,          component: ForceUninstaller }
       ]
     },
     {
-      label: 'Logs & Settings',
+      label: 'Privacy & Security',
       items: [
-        { id: 'history',        label: 'Repair History',     icon: ClipboardList,    component: HistoryLogs },
-        { id: 'bsod-analyzer',  label: 'BSOD Analyzer',      icon: Skull,            component: BsodAnalyzer },
-        { id: 'report-center',  label: 'Report Center',      icon: FileText,         component: ReportCenter },
-        { id: 'settings',       label: 'Settings',           icon: Settings,         component: SettingsView }
+        { id: 'privacy',           label: 'Privacy Cleaner',       icon: Shield,          component: PrivacyCleaner },
+        { id: 'privacy-blackhole', label: 'Privacy Blackhole',     icon: ShieldOff,       component: PrivacyBlackhole },
+        { id: 'solas-vault',       label: 'Encrypted Vault',       icon: Lock,            component: SolasVault },
+        { id: 'hosts-editor',      label: 'Hosts Ad-Block',        icon: ShieldAlert,     component: HostsEditor },
+        { id: 'browser',           label: 'Browser Repair',        icon: Globe,           component: BrowserRepair }
       ]
     },
     {
-      label: 'Ironclad Defense',
+      label: 'System Management',
       items: [
-        { id: 'privacy-blackhole', label: 'Privacy Blackhole', icon: ShieldOff,      component: PrivacyBlackhole },
-        { id: 'solas-vault',       label: 'Solas Vault',       icon: Lock,           component: SolasVault }
+        { id: 'registry',          label: 'Registry Manager',      icon: Database,        component: RegistryManager },
+        { id: 'services',          label: 'Services Manager',      icon: Settings2,       component: ServiceManager },
+        { id: 'network',           label: 'Network Monitor',       icon: Wifi,            component: NetworkMonitor },
+        { id: 'windows-tweaks',    label: 'Windows God Mode',      icon: ShieldAlert,     component: WindowsTweaks },
+        { id: 'command-hub',       label: 'Command Terminal',      icon: Terminal,        component: CommandHub }
       ]
     },
     {
-      label: 'Time Machine',
+      label: 'Backup & Recovery',
       items: [
-        { id: 'micro-snapshots',   label: 'Micro-Snapshots',   icon: History,        component: MicroSnapshots },
-        { id: 'pc-clone',          label: 'PC Clone',          icon: Copy,           component: PcClone }
+        { id: 'micro-snapshots',   label: 'System Snapshots',      icon: History,         component: MicroSnapshots },
+        { id: 'pc-clone',          label: 'PC Clone & Migrate',    icon: Copy,            component: PcClone }
       ]
     },
     {
-      label: 'Always-On Intelligence',
+      label: 'Automation & Intelligence',
       items: [
-        { id: 'predictive-maintenance', label: 'Predictive Maintenance', icon: HeartPulse, component: PredictiveMaintenance },
-        { id: 'solas-sentinel',         label: 'Solas Sentinel',         icon: Radar,     component: SolasSentinel }
+        { id: 'workspace-automation', label: 'Workspace Profiles',   icon: Briefcase,       component: WorkspaceAutomation },
+        { id: 'solas-sentinel',       label: 'Auto-Heal Watchdog',   icon: Radar,           component: SolasSentinel }
       ]
     },
     {
-      label: 'Stretch Goals',
+      label: 'Advanced Tools',
       items: [
-        { id: 'v-cache',          label: 'Solas V-Cache',  icon: Gauge, component: VCache },
-        { id: 'seamless-sandbox', label: 'Seamless Sandbox', icon: Box, component: SeamlessSandbox }
+        { id: 'file-shredder',     label: 'Secure File Shredder',  icon: Scissors,        component: FileShredder },
+        { id: 'file-unlocker',     label: 'File Unlocker',         icon: Unlock,          component: FileUnlocker },
+        { id: 'duplicate-finder',  label: 'Duplicate Finder',      icon: Copy,            component: DuplicateFinder },
+        { id: 'broken-shortcuts',  label: 'Shortcut Cleaner',      icon: FileX,           component: BrokenShortcuts },
+        { id: 'v-cache',           label: 'RAM Disk (V-Cache)',    icon: Gauge,           component: VCache },
+        { id: 'seamless-sandbox',  label: 'App Sandbox',           icon: Box,             component: SeamlessSandbox }
       ]
     },
     {
-      label: 'Extra Tools',
+      label: 'Logs & Reports',
       items: [
-        { id: 'command-hub',          label: 'Command Hub',         icon: Terminal,       component: CommandHub },
-        { id: 'windows-tweaks',       label: 'Windows God Mode',    icon: ShieldAlert,    component: WindowsTweaks },
-        { id: 'god-mode-tweaker',     label: 'God Mode Tweaker',    icon: SlidersHorizontal, component: GodModeTweaker },
-        { id: 'software-forge',       label: 'Software Forge',      icon: Hammer,         component: SoftwareForge },
-        { id: 'surgical-uninstaller', label: 'Surgical Uninstaller', icon: Crosshair,     component: SurgicalUninstaller },
-        { id: 'workspace-automation', label: 'Workspace Automation', icon: Briefcase,     component: WorkspaceAutomation },
-        { id: 'force-uninstaller',    label: 'Force Uninstaller',   icon: Trash2,         component: ForceUninstaller },
-        { id: 'file-shredder',        label: 'File Shredder',       icon: Scissors,       component: FileShredder },
-        { id: 'file-unlocker',        label: 'File Unlocker',       icon: Unlock,         component: FileUnlocker },
-        { id: 'duplicate-finder',     label: 'Duplicate Finder',    icon: Copy,           component: DuplicateFinder },
-        { id: 'broken-shortcuts',     label: 'Broken Shortcuts',    icon: FileX,          component: BrokenShortcuts }
+        { id: 'history',           label: 'Activity History',      icon: ClipboardList,   component: HistoryLogs },
+        { id: 'report-center',     label: 'Report Center',         icon: FileText,        component: ReportCenter },
+        { id: 'settings',          label: 'Settings',              icon: Settings,        component: SettingsView }
       ]
     }
   ];
@@ -284,144 +296,174 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-    <div className="flex h-screen w-screen overflow-hidden bg-brand-navy font-sans text-white transition-colors duration-300">
-      {/* Sidebar Navigation */}
-      <aside className="w-16 md:w-64 bg-slate-900 border-r border-brand-border flex flex-col justify-between p-3 md:p-4 select-none overflow-y-auto shrink-0 transition-all duration-350">
-        <div>
-          {/* Logo Section */}
-          <div className="flex items-center gap-3 px-1 md:px-2 py-4 mb-6">
-            <Zap className="h-8 w-8 text-brand-violet animate-pulse shrink-0" />
-            <div className="hidden md:block">
-              <div className="flex flex-col">
-                <span className="font-black text-xl tracking-widest text-white drop-shadow-md">
-                  SOLASCARE PRO
-                </span>
-                <span className="text-[10px] text-brand-violet uppercase font-bold tracking-widest"> Repair Center</span>
+    <div className="flex h-screen w-screen overflow-hidden bg-[#070b14] font-sans text-white transition-colors duration-300 relative">
+      
+      {/* Stunning Aurora Background */}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-[20%] -left-[10%] w-[50vw] h-[50vw] rounded-full bg-brand-violet/20 blur-[120px] animate-rotate-slow"></div>
+        <div className="absolute top-[20%] -right-[10%] w-[60vw] h-[60vw] rounded-full bg-brand-cyan/10 blur-[140px] animate-pulse-glow"></div>
+        <div className="absolute -bottom-[20%] left-[20%] w-[50vw] h-[50vw] rounded-full bg-emerald-500/10 blur-[120px] animate-pulse-glow"></div>
+      </div>
+
+      {/* Main App Container */}
+      <div className="relative z-10 flex w-full h-full p-4 gap-4 md:p-6 md:gap-6">
+        
+        {/* Floating Sidebar */}
+        <aside className="w-20 md:w-72 bg-slate-900/40 backdrop-blur-2xl border border-white/10 rounded-[2rem] flex flex-col justify-between p-3 md:p-5 select-none overflow-y-auto shrink-0 shadow-2xl transition-all duration-350 z-20">
+          <div>
+            {/* Logo Section */}
+            <div className="flex items-center gap-3 px-1 md:px-2 py-4 mb-4">
+              <div className="p-2.5 bg-gradient-to-br from-brand-violet to-brand-cyan rounded-2xl shadow-lg shrink-0">
+                <Zap className="h-6 w-6 text-white animate-pulse" />
+              </div>
+              <div className="hidden md:block">
+                <div className="flex flex-col">
+                  <span className="font-black text-xl tracking-wider text-white drop-shadow-md">
+                    SOLASCARE
+                  </span>
+                  <span className="text-[10px] text-brand-cyan uppercase font-bold tracking-widest bg-brand-cyan/10 px-2 py-0.5 rounded-full w-max mt-1 border border-brand-cyan/20">Pro Edition</span>
+                </div>
               </div>
             </div>
-            <span className="bg-brand-violet text-white px-2 py-0.5 rounded text-[10px] font-black">
-              v5.0.0
-            </span>
+
+            {/* Navigation Items */}
+            <nav className="space-y-4">
+              {navigationCategories.map((cat, index) => {
+                const isExpanded = expandedCats[cat.label];
+                return (
+                  <div key={index} className="flex flex-col">
+                    <button
+                      onClick={() => setExpandedCats(prev => ({ ...prev, [cat.label]: !prev[cat.label] }))}
+                      className="flex items-center justify-between w-full px-2 py-1 mb-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-white transition-colors cursor-pointer hidden md:flex group"
+                    >
+                      <span>{cat.label}</span>
+                      {isExpanded ? <ChevronDown className="h-3 w-3 opacity-50 group-hover:opacity-100" /> : <ChevronRight className="h-3 w-3 opacity-50 group-hover:opacity-100" />}
+                    </button>
+                    
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0 }} 
+                          animate={{ opacity: 1, height: 'auto' }} 
+                          exit={{ opacity: 0, height: 0 }}
+                          className="space-y-1 overflow-hidden"
+                        >
+                          {cat.items.map(item => {
+                            const Icon = item.icon;
+                            const isActive = activeTab === item.id;
+                            return (
+                              <button
+                                key={item.id}
+                                onClick={() => handleSetActiveTab(item.id)}
+                                title={item.label}
+                                className={`w-full flex items-center justify-center md:justify-start gap-3 px-3 md:px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 cursor-pointer relative group overflow-hidden ${
+                                  isActive 
+                                    ? 'text-white bg-white/10 shadow-[0_0_15px_rgba(139,92,246,0.15)] border border-white/10' 
+                                    : 'text-slate-400 hover:text-slate-100 hover:bg-white/5 border border-transparent'
+                                }`}
+                              >
+                                {isActive && (
+                                  <motion.div layoutId="activeTabIndicator" className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-brand-violet to-brand-cyan" />
+                                )}
+                                <Icon className={`h-5 w-5 shrink-0 transition-colors ${isActive ? 'text-brand-cyan' : 'text-slate-400 group-hover:text-brand-violet'}`} />
+                                <span className="hidden md:inline truncate relative z-10">{item.label}</span>
+                              </button>
+                            );
+                          })}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </nav>
           </div>
 
-          {/* Navigation Items */}
-          <nav className="space-y-2">
-            {navigationCategories.map((cat, index) => {
-              const isExpanded = expandedCats[cat.label];
-              return (
-                <div key={index} className="flex flex-col">
-                  {/* Category Header */}
-                  <button
-                    onClick={() => setExpandedCats(prev => ({ ...prev, [cat.label]: !prev[cat.label] }))}
-                    className="flex items-center justify-between w-full px-4 py-2 mt-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider hover:text-white transition-colors cursor-pointer hidden md:flex group"
+          {/* Footer Area */}
+          <div className="mt-6 pt-4 border-t border-white/5">
+            <div className={`flex items-center justify-center md:justify-start gap-3 px-4 py-3 rounded-xl backdrop-blur-md ${isAdmin ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-rose-500/10 border border-rose-500/20'}`}>
+              {isAdmin ? (
+                <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+              ) : (
+                <ShieldAlert className="h-5 w-5 text-rose-400 shrink-0 drop-shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
+              )}
+              <div className="hidden md:block truncate text-left">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Access Level</p>
+                <p className={`text-xs font-black ${isAdmin ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {isAdmin ? 'ADMINISTRATOR' : 'STANDARD'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Panel Content Area */}
+        <main className="flex-1 flex flex-col min-w-0 bg-slate-900/40 backdrop-blur-3xl rounded-[2rem] overflow-hidden shadow-2xl border border-white/10 z-20 relative">
+          
+          {/* Header Bar */}
+          <header className="h-16 border-b border-white/10 flex items-center justify-between px-8 shrink-0 bg-white/5 backdrop-blur-md">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-400 select-none uppercase tracking-widest">
+              <span>SolasCare</span>
+              <span className="text-brand-violet">/</span>
+              <span className="text-white drop-shadow-md">{getBreadcrumb()}</span>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <span className="text-[11px] font-mono text-slate-500 bg-slate-950/50 px-3 py-1 rounded-full border border-white/5">
+                v{systemInfo?.appVersion || '5.1.0'}
+              </span>
+            </div>
+          </header>
+
+          {/* Body View Host */}
+          <div className="flex-1 overflow-y-auto bg-transparent relative p-4 md:p-6 scroll-smooth">
+            <React.Suspense fallback={
+              <div className="flex h-full w-full items-center justify-center">
+                <div className="relative">
+                  <div className="absolute inset-0 rounded-full blur-xl bg-brand-violet/30 animate-pulse"></div>
+                  <RefreshCw className="h-8 w-8 animate-spin text-brand-cyan relative z-10" />
+                </div>
+              </div>
+            }>
+              {navigationCategories.flatMap(cat => cat.items).map((item) => {
+                const Component = item.component;
+                const isVisited = visitedTabs.includes(item.id);
+                const isActive = activeTab === item.id;
+                if (!isVisited) return null;
+                const proGate = PRO_FEATURE_MAP[item.id];
+                const renderContent = () => (
+                  item.id === 'dashboard' ? (
+                    <Component setActiveTab={handleSetActiveTab} isWindowActive={isWindowActive} />
+                  ) : item.id === 'network' ? (
+                    <Component isWindowActive={isWindowActive} />
+                  ) : item.id === 'settings' ? (
+                    <Component theme={theme} setTheme={handleSetTheme} />
+                  ) : item.id === 'ai-diagnostics' ? (
+                    <Component setActiveTab={handleSetActiveTab} />
+                  ) : (
+                    <Component />
+                  )
+                );
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                    animate={{ opacity: isActive ? 1 : 0, scale: isActive ? 1 : 0.98, y: isActive ? 0 : 10 }}
+                    transition={{ duration: 0.4, ease: "easeOut" }}
+                    className={isActive ? "h-full w-full" : "hidden"}
                   >
-                    <span>{cat.label}</span>
-                    {isExpanded ? <ChevronDown className="h-3 w-3 opacity-50 group-hover:opacity-100" /> : <ChevronRight className="h-3 w-3 opacity-50 group-hover:opacity-100" />}
-                  </button>
-                  
-                  {/* Category Items */}
-                  {isExpanded && (
-                    <div className="space-y-1 mt-1">
-                      {cat.items.map(item => {
-                        const Icon = item.icon;
-                        const isActive = activeTab === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            onClick={() => handleSetActiveTab(item.id)}
-                            title={item.label}
-                            aria-label={`Navigate to ${item.label}`}
-                            className={`w-full flex items-center justify-center md:justify-start gap-3 px-3 md:px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
-                              isActive 
-                                ? 'bg-gradient-to-r from-brand-violet/20 to-brand-cyan/10 border-l-4 border-brand-violet text-white shadow-md' 
-                                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                            }`}
-                          >
-                            <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-brand-violet' : 'text-slate-400'}`} />
-                            <span className="hidden md:inline truncate">{item.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Footer Area with Privilege Badge */}
-        <div className="border-t border-brand-border pt-4 space-y-3">
-          <div className={`flex items-center justify-center md:justify-start gap-3 px-3 py-2 rounded-lg ${isAdmin ? 'bg-emerald-950/30 border border-emerald-500/20' : 'bg-rose-950/30 border border-rose-500/20'}`} role="status" aria-label={isAdmin ? 'Running in Admin Mode' : 'Running in Standard Mode'}>
-            {isAdmin ? (
-              <ShieldCheck className="h-5 w-5 text-brand-success shrink-0" />
-            ) : (
-              <ShieldAlert className="h-5 w-5 text-brand-danger shrink-0" />
-            )}
-            <div className="hidden md:block truncate text-left">
-              <p className="text-[11px] font-bold text-slate-300">PRIVILEGES</p>
-              <p className={`text-[10px] font-semibold ${isAdmin ? 'text-brand-success' : 'text-brand-danger'}`}>
-                {isAdmin ? 'Admin Mode' : 'Standard'}
-              </p>
-            </div>
-            </div>
-            <div className="mt-auto px-4 pb-6">
-            <p className="hidden md:block text-[10px] text-slate-500 text-center mt-3 font-medium">SolasCare Pro v5.0.0</p>
+                    {proGate ? (
+                      <ProFeatureGate featureId={proGate.featureId} fallbackLabel={proGate.label}>
+                        {renderContent()}
+                      </ProFeatureGate>
+                    ) : renderContent()}
+                  </motion.div>
+                );
+              })}
+            </React.Suspense>
           </div>
-        </div>
-      </aside>
-
-      {/* Main Panel Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 bg-brand-navy transition-colors duration-300">
-        {/* Header Bar */}
-        <header className="h-16 border-b border-brand-border flex items-center justify-between px-6 shrink-0 bg-slate-950/40">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 select-none">
-            <span>Home</span>
-            <span>/</span>
-            <span className="text-brand-cyan">{getBreadcrumb()}</span>
-          </div>
-        </header>
-
-        {/* Body View Host with state-preserving tabs visibility toggling */}
-        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-brand-navy via-slate-900 to-brand-navy transition-colors duration-300 relative">
-          <React.Suspense fallback={
-            <div className="flex h-full w-full items-center justify-center bg-brand-navy">
-              <RefreshCw className="h-6 w-6 animate-spin text-brand-violet" />
-            </div>
-          }>
-            {navigationCategories.flatMap(cat => cat.items).map((item) => {
-              const Component = item.component;
-              const isVisited = visitedTabs.includes(item.id);
-              const isActive = activeTab === item.id;
-              if (!isVisited) return null;
-              const proGate = PRO_FEATURE_MAP[item.id];
-              const renderContent = () => (
-                item.id === 'dashboard' ? (
-                  <Component setActiveTab={handleSetActiveTab} isWindowActive={isWindowActive} />
-                ) : item.id === 'network' ? (
-                  <Component isWindowActive={isWindowActive} />
-                ) : item.id === 'settings' ? (
-                  <Component theme={theme} setTheme={handleSetTheme} />
-                ) : (
-                  <Component />
-                )
-              );
-              return (
-                <div
-                  key={item.id}
-                  className={isActive ? "h-full w-full" : "hidden"}
-                >
-                  {proGate ? (
-                    <ProFeatureGate featureId={proGate.featureId} fallbackLabel={proGate.label}>
-                      {renderContent()}
-                    </ProFeatureGate>
-                  ) : renderContent()}
-                </div>
-              );
-            })}
-          </React.Suspense>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
     </ErrorBoundary>
   );

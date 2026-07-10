@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Shield, ShieldOff, ShieldCheck, ShieldAlert, Loader2, RefreshCw, Play,
-  X, Info, AlertTriangle, Activity, Eye, EyeOff, Database, Server, Zap,
+  Shield, ShieldOff, ShieldCheck, Loader2, Info, Activity, Eye, Database, Server, Zap,
   Check, RotateCcw, Search
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';

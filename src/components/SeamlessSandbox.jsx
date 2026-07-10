@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Play, FileText, Activity, Loader2, AlertTriangle, Info, CheckCircle2,
-  XCircle, Server, Cpu, Globe, FolderOpen, RefreshCw, X
+  XCircle, Server, Cpu, Globe, FolderOpen, RefreshCw
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';

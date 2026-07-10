@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Loader2, RefreshCw, Trash2, Search } from 'lucide-react';
+import { Loader2, RefreshCw, Trash2, Search } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';
-import CommandOutput from './shared/CommandOutput';
 
 export default function ForceUninstaller() {
   const { addNotification } = useNotification();

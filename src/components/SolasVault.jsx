@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Lock, Unlock, HardDrive, Plus, Trash2, Loader2, RefreshCw, Key, Shield,
-  AlertTriangle, Info, X, Activity, Eye, EyeOff, Clock, Check
+  Lock, Unlock, HardDrive, Plus, Trash2, Loader2,
+  AlertTriangle, Info, X, Activity, Eye, EyeOff, Clock
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';

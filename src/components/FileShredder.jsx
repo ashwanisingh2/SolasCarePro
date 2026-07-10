@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Loader2, Scissors, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { Loader2, Scissors, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Zap, HardDrive, Plus, Trash2, RefreshCw, Loader2, AlertTriangle, Info,
-  CheckCircle2, X, Settings2, Activity, Download, Link2, Unlink, Cpu
+  Zap, HardDrive, Plus, Trash2, Loader2, AlertTriangle, Info,
+  CheckCircle2, Settings2, Activity, Download, Link2, Unlink
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';

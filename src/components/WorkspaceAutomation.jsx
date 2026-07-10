@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Briefcase, Code, Video, Gamepad2, Plus, Pencil, Trash2, Play, RotateCcw,
-  Loader2, RefreshCw, Clock, AppWindow, Wifi, X, Sparkles, Zap, Bell, BellOff,
-  Power, Pause, Info, AlertTriangle, CheckCircle2, Settings2
+  Loader2, RefreshCw, Clock, AppWindow, Wifi, X, Sparkles, Zap, BellOff,
+  Power, Pause, Info, CheckCircle2, Settings2
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';
@@ -746,7 +746,7 @@ function TriggersPanel({ profile }) {
         <h3 className="text-sm font-bold text-slate-200">
           Triggers for <span className="text-brand-violet">{profile.name}</span>
         </h3>
-        {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-violet ml-auto" />}
+        {(saving || loading) && <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-violet ml-auto" />}
       </div>
 
       <div className="p-4 space-y-4">

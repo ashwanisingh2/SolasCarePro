@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Settings2, RefreshCw, Loader2, Play, Power, AlertTriangle, ShieldCheck, Search, AlertCircle } from 'lucide-react';
+import { Settings2, RefreshCw, Loader2, ShieldCheck, Search, AlertCircle } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useDebounced } from '../utils/hooks';
 import { SkeletonTable } from './shared/Skeleton';

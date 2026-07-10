@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Activity, HardDrive, Cpu, MemoryStick, Battery, Thermometer, Fan, AlertTriangle,
+  Activity, HardDrive, MemoryStick, Battery, Thermometer, AlertTriangle,
   Loader2, RefreshCw, Settings2, X, TrendingDown, TrendingUp, CheckCircle2,
-  Info, Clock, Zap, Database
+  Info, Wrench, ChevronDown, ChevronRight, Bot
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';
@@ -53,8 +53,13 @@ export default function PredictiveMaintenance() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showOutput, setShowOutput] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'trend' | 'alerts' | 'settings'
+  const [activeTab, setActiveTab] = useState('overview');
   const [liveAlert, setLiveAlert] = useState(null);
+  // Diagnostics tab state
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagResult, setDiagResult] = useState(null);
+  // SMART expand
+  const [smartExpanded, setSmartExpanded] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -166,6 +171,26 @@ export default function PredictiveMaintenance() {
     }
   };
 
+  const runInlineDiagnostics = async () => {
+    setDiagLoading(true);
+    setDiagResult(null);
+    try {
+      if (window.api) {
+        const res = await window.api.runSystemCommand('ai-diagnostics', ['diagnose']);
+        const match = res?.stdout?.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error('No output from diagnostics script');
+        const parsed = JSON.parse(match[match.length - 1]);
+        if (!parsed.success) throw new Error(parsed.error || 'Diagnostics failed');
+        setDiagResult(parsed);
+        addNotification('Predictive Maintenance', `Diagnostics: ${parsed.message || 'Complete'}`, 'info');
+      }
+    } catch (e) {
+      addNotification('Predictive Maintenance', 'Diagnostics failed: ' + e.message, 'error');
+    } finally {
+      setDiagLoading(false);
+    }
+  };
+
   const statusMeta = score ? STATUS_META[score.status] : null;
 
   return (
@@ -205,12 +230,13 @@ export default function PredictiveMaintenance() {
       {showOutput && <CommandOutput channel="care-out" height="100px" />}
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-brand-border">
+      <div className="flex gap-1 border-b border-brand-border flex-wrap">
         {[
-          { id: 'overview', label: 'Overview', icon: Activity },
-          { id: 'trend', label: 'Trend (90 days)', icon: TrendingDown },
-          { id: 'alerts', label: 'Alerts', icon: AlertTriangle },
-          { id: 'settings', label: 'Thresholds', icon: Settings2 }
+          { id: 'overview',     label: 'Overview',       icon: Activity },
+          { id: 'trend',        label: 'Trend (90 days)', icon: TrendingDown },
+          { id: 'alerts',       label: 'Alerts',          icon: AlertTriangle },
+          { id: 'diagnostics',  label: 'Diagnostics',     icon: Bot },
+          { id: 'settings',     label: 'Thresholds',      icon: Settings2 }
         ].map(t => {
           const Icon = t.icon;
           const isA = activeTab === t.id;
@@ -259,31 +285,47 @@ export default function PredictiveMaintenance() {
                   value={score.details.smart.available ? `${score.details.smart.predicting} disk(s) predicting failure` : 'Not available'}
                   penalty={score.details.smart.penalty}
                   weight={score.details.smart.weight}
-                  detail={smartData ? `${smartData.count} disk(s) monitored` : 'Click Refresh Metrics'} />
+                  detail={smartData ? `${smartData.count} disk(s) monitored` : 'Click Refresh Metrics'}
+                  fixLabel={score.details.smart.penalty > 0 ? 'Run chkdsk' : null}
+                  onFix={() => addNotification('Fix', 'Go to Command Hub → Quick Check Disk', 'info')} />
                 <ComponentCard icon={MemoryStick} title="RAM" color="violet"
                   available={score.details.ram.available}
                   value={score.details.ram.available ? `${score.details.ram.errors} error(s)` : 'Not available'}
                   penalty={score.details.ram.penalty}
                   weight={score.details.ram.weight}
-                  detail={ramData ? `${ramData.sticks?.length || 0} sticks · ${formatBytes(ramData.totalCapacityBytes)}` : 'Click Refresh Metrics'} />
+                  detail={ramData ? `${ramData.sticks?.length || 0} sticks · ${formatBytes(ramData.totalCapacityBytes)}` : 'Click Refresh Metrics'}
+                  fixLabel={score.details.ram.penalty > 0 ? 'Check RAM' : null}
+                  onFix={() => addNotification('Fix', 'Run Windows Memory Diagnostic: Start → mdsched.exe', 'warning')} />
                 <ComponentCard icon={Thermometer} title="CPU Temperature" color="amber"
                   available={score.details.cpuTemp.available}
                   value={score.details.cpuTemp.available ? `${score.details.cpuTemp.celsius}°C` : 'Not available (vendor-specific)'}
                   penalty={score.details.cpuTemp.penalty}
                   weight={score.details.cpuTemp.weight}
-                  detail={cpuTemp?.available ? `Zone: ${cpuTemp.zoneName?.slice(0, 30)}` : 'ACPI thermal zone only'} />
+                  detail={cpuTemp?.available ? `Zone: ${cpuTemp.zoneName?.slice(0, 30)}` : 'ACPI thermal zone only'}
+                  fixLabel={score.details.cpuTemp.penalty > 0 ? 'Reduce Heat' : null}
+                  onFix={() => addNotification('Fix', 'Check CPU cooler contact, clean dust, reapply thermal paste. Ensure case airflow is adequate.', 'warning')} />
                 <ComponentCard icon={Battery} title="Battery" color="emerald"
                   available={score.details.battery.available}
                   value={score.details.battery.available ? `${score.details.battery.healthPercent}%` : 'No battery (desktop)'}
                   penalty={score.details.battery.penalty}
                   weight={score.details.battery.weight}
-                  detail={batteryData?.present ? `Status: ${batteryData.batteryStatus}` : 'Not present'} />
+                  detail={batteryData?.present ? `Status: ${batteryData.batteryStatus}` : 'Not present'}
+                  fixLabel={score.details.battery.penalty > 0 ? 'Battery Report' : null}
+                  onFix={async () => {
+                    if (window.api) await window.api.runSystemCommand('run-quick-cmd', ['battery-report']);
+                    addNotification('Fix', 'Battery report generated on Desktop.', 'success');
+                  }} />
                 <ComponentCard icon={HardDrive} title="Disk Free Space" color="rose"
                   available={score.details.diskFree.available}
                   value={score.details.diskFree.available ? `${score.details.diskFree.freePercent}% free` : 'Not available'}
                   penalty={score.details.diskFree.penalty}
                   weight={score.details.diskFree.weight}
-                  detail="System drive" />
+                  detail="System drive (C:)"
+                  fixLabel={score.details.diskFree.penalty > 0 ? 'Run Disk Cleanup' : null}
+                  onFix={async () => {
+                    if (window.api) await window.api.runSystemCommand('run-quick-cmd', ['disk-cleanup-silent']);
+                    addNotification('Fix', 'Disk Cleanup running in background.', 'success');
+                  }} />
                 <ComponentCard icon={Info} title="Health Methodology" color="slate"
                   available={true}
                   value="Threshold-based"
@@ -291,6 +333,53 @@ export default function PredictiveMaintenance() {
                   weight={0}
                   detail="Honest: no failure date prediction. Vendor-inconsistent SMART makes that unreliable." />
               </div>
+
+              {/* SMART Detail Table (shown after Refresh Metrics) */}
+              {smartData?.disks?.length > 0 && (
+                <div className="glass-panel border border-brand-border rounded-xl overflow-hidden">
+                  <button onClick={() => setSmartExpanded(p => !p)}
+                    className="w-full flex items-center justify-between px-4 py-3 text-left cursor-pointer hover:bg-white/5 transition-colors">
+                    <span className="text-sm font-bold text-slate-200 flex items-center gap-2">
+                      <HardDrive className="h-4 w-4 text-brand-cyan" /> SMART Disk Details
+                      <span className="text-[10px] text-slate-500">({smartData.disks.length} disk{smartData.disks.length > 1 ? 's' : ''})</span>
+                    </span>
+                    {smartExpanded ? <ChevronDown className="h-4 w-4 text-slate-500" /> : <ChevronRight className="h-4 w-4 text-slate-500" />}
+                  </button>
+                  {smartExpanded && (
+                    <div className="overflow-x-auto border-t border-brand-border">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-slate-900/60">
+                            {['Disk', 'Type', 'Size', 'Health', 'Status', 'Reason'].map(h => (
+                              <th key={h} className="px-3 py-2 text-left text-[10px] text-slate-500 uppercase font-bold">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-brand-border/30">
+                          {smartData.disks.map((d, i) => (
+                            <tr key={i} className="hover:bg-white/5">
+                              <td className="px-3 py-2 text-slate-200 font-medium">{d.FriendlyName || `Disk ${i}`}</td>
+                              <td className="px-3 py-2 text-slate-400">{d.MediaType || '—'}</td>
+                              <td className="px-3 py-2 text-slate-400">{d.Size ? `${Math.round(d.Size / 1e9)} GB` : '—'}</td>
+                              <td className="px-3 py-2">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  d.HealthStatus === 'Healthy'
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                    : d.HealthStatus === 'Warning'
+                                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                                    : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                                }`}>{d.HealthStatus || '—'}</span>
+                              </td>
+                              <td className="px-3 py-2 text-slate-400">{d.OperationalStatus || '—'}</td>
+                              <td className="px-3 py-2 text-slate-400">{d.ReasonForState || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* About */}
               <div className="bg-brand-cyan/5 border border-brand-cyan/20 rounded-lg p-3 text-xs text-slate-300 flex items-start gap-2">
@@ -357,6 +446,84 @@ export default function PredictiveMaintenance() {
           {activeTab === 'settings' && settings && (
             <ThresholdPanel settings={settings} onSave={handleSaveSettings} />
           )}
+
+          {activeTab === 'diagnostics' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-slate-400">
+                  Runs the same expert system as Smart Diagnostics — 8 rules across RAM, disk, drivers, events, and stability.
+                </p>
+                <button onClick={runInlineDiagnostics} disabled={diagLoading}
+                  className="px-3 py-2 bg-brand-violet hover:bg-brand-violet/80 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer shrink-0">
+                  {diagLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />}
+                  {diagLoading ? 'Analyzing...' : 'Run Diagnostics'}
+                </button>
+              </div>
+
+              {!diagResult && !diagLoading && (
+                <div className="py-10 text-center">
+                  <Bot className="h-10 w-10 text-slate-700 mx-auto mb-3" />
+                  <p className="text-xs text-slate-500">Click "Run Diagnostics" to analyse system metrics and event logs.</p>
+                </div>
+              )}
+
+              {diagLoading && (
+                <div className="py-10 flex flex-col items-center gap-3">
+                  <Loader2 className="h-7 w-7 animate-spin text-brand-violet" />
+                  <p className="text-xs text-slate-400">Running expert system analysis...</p>
+                </div>
+              )}
+
+              {diagResult && !diagLoading && (
+                <div className="space-y-3">
+                  {/* Summary */}
+                  <div className="flex gap-3 flex-wrap">
+                    {[
+                      { label: 'Critical', count: diagResult.criticalCount, color: 'bg-rose-500/10 border-rose-500/30 text-rose-400' },
+                      { label: 'Warnings', count: diagResult.warningCount,  color: 'bg-amber-500/10 border-amber-500/30 text-amber-400' },
+                      { label: 'Total',    count: diagResult.findings?.length || 0, color: 'bg-slate-800 border-brand-border text-slate-300' },
+                    ].map(b => (
+                      <div key={b.label} className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${b.color}`}>
+                        <span className="text-lg font-black">{b.count}</span> {b.label}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Findings */}
+                  {diagResult.findings?.length === 0 && (
+                    <div className="py-8 text-center">
+                      <CheckCircle2 className="h-9 w-9 text-emerald-500 mx-auto mb-2" />
+                      <p className="text-sm font-bold text-emerald-400">All Clear</p>
+                      <p className="text-xs text-slate-500 mt-1">No issues detected across all diagnostic rules.</p>
+                    </div>
+                  )}
+
+                  {diagResult.findings?.map((f, i) => {
+                    const sev = f.severity;
+                    const border = sev === 'critical' ? 'border-rose-500/30 bg-rose-500/5'
+                      : sev === 'warning' ? 'border-amber-500/30 bg-amber-500/5'
+                      : 'border-brand-border bg-slate-900/30';
+                    const textColor = sev === 'critical' ? 'text-rose-400'
+                      : sev === 'warning' ? 'text-amber-400' : 'text-brand-cyan';
+                    return (
+                      <div key={f.id || i} className={`glass-panel border rounded-xl p-4 space-y-2 ${border}`}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase ${border} ${textColor}`}>{sev}</span>
+                          <span className="text-sm font-bold text-slate-200">{f.diagnosis.split('.')[0]}</span>
+                          <span className="text-[10px] text-slate-500">{f.category}</span>
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed">{f.diagnosis}</p>
+                        <div className="p-3 bg-slate-950/60 rounded border border-slate-800 space-y-1">
+                          <p className="text-[10px] text-brand-violet font-bold uppercase">Recommended Fix</p>
+                          <p className="text-xs text-slate-300 leading-relaxed">{f.recommendation}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -368,7 +535,6 @@ export default function PredictiveMaintenance() {
 function HealthGauge({ score, status }) {
   const meta = STATUS_META[status] || STATUS_META.healthy;
   // Semicircle: 180 degrees, score 0-100
-  const angle = (score / 100) * 180;
   return (
     <div className="relative w-full h-32 flex items-end justify-center">
       <svg viewBox="0 0 200 110" className="w-full max-w-xs">
@@ -397,7 +563,7 @@ function HealthGauge({ score, status }) {
 
 // --- Component Card ---
 
-function ComponentCard({ icon: Icon, title, color, available, value, penalty, weight, detail }) {
+function ComponentCard({ icon: Icon, title, color, available, value, penalty, weight, detail, fixLabel, onFix }) {
   const colorClass = {
     cyan: 'text-brand-cyan border-brand-cyan/30 bg-brand-cyan/5',
     violet: 'text-brand-violet border-brand-violet/30 bg-brand-violet/5',
@@ -421,6 +587,12 @@ function ComponentCard({ icon: Icon, title, color, available, value, penalty, we
       <div className="text-[10px] text-slate-500 mt-1">{detail}</div>
       {weight > 0 && (
         <div className="text-[9px] text-slate-600 mt-1">weight: {weight}%</div>
+      )}
+      {fixLabel && onFix && (
+        <button onClick={onFix}
+          className="mt-3 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 text-[10px] font-bold rounded-lg cursor-pointer transition-colors">
+          <Wrench className="h-3 w-3" /> {fixLabel}
+        </button>
       )}
     </div>
   );

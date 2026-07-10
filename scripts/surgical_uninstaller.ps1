@@ -353,9 +353,11 @@ function Invoke-ScanOrphans {
     }
 
     # 2. Orphaned AppData folders (folders that don't match any installed app name)
+    # NOTE: No commas between items — commas inside @() in command-arg context create
+    #       arrays, which would make Join-Path receive Object[] as ChildPath and crash.
     $appDataRoots = @(
-        Join-Path $env:LOCALAPPDATA '',
-        $env:APPDATA,
+        $env:LOCALAPPDATA
+        $env:APPDATA
         $env:PROGRAMDATA
     )
     foreach ($root in $appDataRoots) {
@@ -492,7 +494,7 @@ function Invoke-SurgicalUninstall {
 
     # STEP 3: Sweep AppData folders matching app name
     if ($name) {
-        $safeName = $name -replace '[\\/:*?"<>|]', ''
+        $safeName = ([string]$name) -replace '[\\/:*?"<>|]', ''
         $appDataCandidates = @(
             Join-Path $env:LOCALAPPDATA $safeName
             Join-Path $env:LOCALAPPDATA ($safeName -replace ' ','')
@@ -501,8 +503,13 @@ function Invoke-SurgicalUninstall {
             Join-Path $env:PROGRAMDATA $safeName
             Join-Path $env:PROGRAMDATA ($safeName -replace ' ','')
             # Also check vendor-based paths (e.g. "Adobe" for "Adobe Acrobat")
-            $(if ($app.Publisher) { Join-Path $env:LOCALAPPDATA $app.Publisher })
-            $(if ($app.Publisher) { Join-Path $env:APPDATA $app.Publisher })
+            $(if ($app.Publisher) { 
+                $safePub = ([string]$app.Publisher) -replace '[\\/:*?"<>|]', ''
+                if ($safePub) {
+                    Join-Path $env:LOCALAPPDATA $safePub
+                    Join-Path $env:APPDATA $safePub
+                }
+            })
         ) | Where-Object { $_ -and (Test-Path $_) }
 
         foreach ($p in $appDataCandidates) {
@@ -612,7 +619,7 @@ function Invoke-GetFootprint {
 
     # AppData folders
     if ($name) {
-        $safeName = $name -replace '[\\/:*?"<>|]', ''
+        $safeName = ([string]$name) -replace '[\\/:*?"<>|]', ''
         $candidates = @(
             Join-Path $env:LOCALAPPDATA $safeName
             Join-Path $env:LOCALAPPDATA ($safeName -replace ' ','')
@@ -620,6 +627,13 @@ function Invoke-GetFootprint {
             Join-Path $env:APPDATA ($safeName -replace ' ','')
             Join-Path $env:PROGRAMDATA $safeName
             Join-Path $env:PROGRAMDATA ($safeName -replace ' ','')
+            $(if ($app.Publisher) { 
+                $safePub = ([string]$app.Publisher) -replace '[\\/:*?"<>|]', ''
+                if ($safePub) {
+                    Join-Path $env:LOCALAPPDATA $safePub
+                    Join-Path $env:APPDATA $safePub
+                }
+            })
         ) | Where-Object { $_ -and (Test-Path $_) }
         $totalAppData = 0
         foreach ($p in $candidates) {

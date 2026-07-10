@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Trash2, ShieldAlert, RefreshCw, Loader2, CheckCircle2, AlertOctagon } from 'lucide-react';
-import { formatBytes } from '../utils/formatters';
+import { Globe, Trash2, RefreshCw, Loader2, AlertOctagon } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import CommandOutput from './shared/CommandOutput';
 

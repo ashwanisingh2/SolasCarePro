@@ -16,7 +16,7 @@
     "ecmaVersion": "latest",
     "sourceType": "module"
   },
-  "plugins": ["react", "react-hooks"],
+  "plugins": ["react", "react-hooks", "unused-imports"],
   "rules": {
     "no-eval": "error",
     "no-implied-eval": "error",
@@ -24,7 +24,12 @@
     "react/react-in-jsx-scope": "off",
     "react/no-unescaped-entities": "off",
     "no-empty": ["error", { "allowEmptyCatch": true }],
-    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-unused-vars": "off",
+    "unused-imports/no-unused-imports": "warn",
+    "unused-imports/no-unused-vars": [
+      "warn",
+      { "vars": "all", "varsIgnorePattern": "^_", "args": "after-used", "argsIgnorePattern": "^_" }
+    ],
     "no-useless-escape": "off",
     "no-undef": "error",
     "no-cond-assign": "error",

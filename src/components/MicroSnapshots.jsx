@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Clock, History, Plus, Trash2, RotateCcw, Loader2, RefreshCw, HardDrive,
-  AlertTriangle, Info, CheckCircle2, Settings2, X, Database, Zap, Power
+  AlertTriangle, Info, CheckCircle2, Settings2, X, Database, Power
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';
@@ -215,6 +215,27 @@ export default function MicroSnapshots() {
     }
   };
 
+  const disableSystemRestore = async () => {
+    setLoading(true);
+    try {
+      if (window.api?.runSystemCommand) {
+        const res = await window.api.runSystemCommand('run-snapshot-tool', ['disable-system-restore']);
+        const obj = safeJsonParse(res.stdout);
+        if (obj?.success) {
+          addNotification('Snapshots', 'System Snapshots disabled.', 'success');
+          setSrEnabled(false);
+          setSnapshots([]);
+        } else {
+          addNotification('Snapshots', obj?.error || 'Failed to disable.', 'error');
+        }
+      }
+    } catch (e) {
+      addNotification('Snapshots', e.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSaveSettings = async (newSettings) => {
     try {
       if (window.api) {
@@ -245,10 +266,16 @@ export default function MicroSnapshots() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowCreate(true)}
-            className="px-3 py-2 bg-brand-violet hover:bg-brand-violet/80 text-white text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer">
+          <button onClick={() => setShowCreate(true)} disabled={!srEnabled}
+            className="px-3 py-2 bg-brand-violet hover:bg-brand-violet/80 text-white text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer disabled:opacity-50">
             <Plus className="h-3.5 w-3.5" /> New Snapshot
           </button>
+          {srEnabled && (
+            <button onClick={disableSystemRestore}
+              className="px-3 py-2 border border-rose-500/50 hover:bg-rose-500/10 text-rose-400 text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer">
+              Disable Snapshots
+            </button>
+          )}
           <button onClick={() => setShowOutput(s => !s)}
             className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg border border-brand-border flex items-center gap-2 cursor-pointer">
             <RefreshCw className="h-3.5 w-3.5" /> {showOutput ? 'Hide' : 'Show'} Output

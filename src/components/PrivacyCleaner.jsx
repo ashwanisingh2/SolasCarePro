@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ShieldCheck, Eye, EyeOff, Trash2, RefreshCw, Globe,
-  Cookie, Search, FolderOpen, HardDrive, Play, Clock, X
+  ShieldCheck, Eye, Trash2, RefreshCw, Globe,
+  Cookie, Search, FolderOpen, HardDrive, Clock, X
 } from 'lucide-react';
 
 export default function PrivacyCleaner() {

@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search, Cpu, ArrowUpCircle, RefreshCw, CheckCircle, AlertTriangle, FileText,
   Ban, Power, Check, ShieldAlert, ShieldCheck, Activity, HardDrive, Download,
-  Upload, FileSearch, Network, ChevronRight, Trash2, Loader2, Eye, X, Save,
-  Globe2, Server, Wifi, WifiOff, Lock
+  Upload, Trash2, Loader2, X, Save,
+  Globe2, Server, Lock
 } from 'lucide-react';
 import CommandOutput from './shared/CommandOutput';
 import { useNotification } from '../context/NotificationContext';
@@ -92,6 +92,7 @@ function extractLastJson(stdout) {
 // Main component
 // =====================================================================
 export default function DriverManager() {
+  const { addNotification } = useNotification();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [devices, setDevices] = useState([]);
   const [healthResult, setHealthResult] = useState(null);
@@ -365,7 +366,7 @@ export default function DriverManager() {
             <button
               onClick={async () => {
                 if (!window.api) {
-                  alert('Reboot is only available in the desktop app.');
+                  addNotification('Reboot Unavailable', 'System reboot is only available in the desktop application', 'warning');
                   return;
                 }
                 try {
@@ -373,8 +374,12 @@ export default function DriverManager() {
                   // commandExecutor.js shows a confirm dialog before running it.
                   await window.api.runSystemCommand('reboot-system');
                   setRebootRequired(false);
+                  addNotification('Reboot Scheduled', 'System will reboot in 30 seconds. Run "shutdown /a" to cancel.', 'success');
                 } catch (e) {
-                  console.warn('Reboot command failed:', e);
+                  if (import.meta.env.DEV) {
+                    console.warn('Reboot command failed:', e);
+                  }
+                  addNotification('Reboot Failed', e.message || 'Failed to schedule system reboot', 'error');
                 }
               }}
               className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-[11px] font-bold rounded text-white cursor-pointer"

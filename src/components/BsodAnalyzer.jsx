@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Skull, AlertTriangle, RefreshCw, Loader2, Info, Search } from 'lucide-react';
+import { Skull, RefreshCw, Loader2, Info } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { formatDate } from '../utils/formatters';
 

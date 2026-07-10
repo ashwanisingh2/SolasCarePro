@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Shield, Lock, AlertTriangle, ChevronRight, CheckCircle2, Loader2, Zap,
-  Activity, Cpu, HardDrive, Wifi, Code, Book, Video, User, Sparkles, Trash2,
-  Gauge, ArrowRight, ArrowLeft
+  Shield, Lock, ChevronRight, CheckCircle2, Loader2, Zap,
+  Activity, HardDrive, Code, Book, Video, User, Sparkles, Trash2, ArrowRight, ArrowLeft
 } from 'lucide-react';
 
 // --- Helpers ---

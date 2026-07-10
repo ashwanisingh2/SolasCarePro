@@ -171,5 +171,10 @@ contextBridge.exposeInMainWorld('api', {
   telemetrySaveSettings: (settings) => ipcRenderer.invoke('telemetry-save-settings', settings),
   telemetryTrackEvent: (eventName, eventData) => ipcRenderer.invoke('telemetry-track-event', eventName, eventData),
   telemetryGetStats: (daysBack) => ipcRenderer.invoke('telemetry-get-stats', daysBack),
-  telemetryGetFeatureUsage: () => ipcRenderer.invoke('telemetry-get-feature-usage')
+  telemetryGetFeatureUsage: () => ipcRenderer.invoke('telemetry-get-feature-usage'),
+
+  // App Update Checker — queries GitHub Releases API, returns update info
+  checkAppUpdate: () => ipcRenderer.invoke('check-app-update'),
+  // Opens a GitHub URL in the default system browser (allowlisted to github.com only)
+  openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url)
 });

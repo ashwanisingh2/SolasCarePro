@@ -231,22 +231,67 @@ const ALLOWED_COMMANDS = {
     streamChannel: 'care-out',
     buildCommand: ([action]) => {
       const presets = {
-        'flush-dns': 'ipconfig /flushdns',
-        'winsock-reset': 'netsh winsock reset',
-        'gpupdate': 'gpupdate /force',
-        'system-info': 'systeminfo',
-        'task-list': 'tasklist',
-        'chkdsk': 'chkdsk /scan',
-        'print-spooler-reset': 'Stop-Service -Name Spooler -Force; Remove-Item -Path "$env:windir\\System32\\spool\\PRINTERS\\*.*" -Force -Recurse; Start-Service -Name Spooler',
-        'wmi-rebuild': 'net stop winmgmt /y; winmgmt /resetrepository; net start winmgmt',
-        'wu-cache-clear': 'Stop-Service wuauserv, cryptSvc, bits, msiserver -Force; Remove-Item -Path "$env:windir\\SoftwareDistribution\\Download\\*" -Recurse -Force -ErrorAction SilentlyContinue; Start-Service wuauserv, cryptSvc, bits, msiserver',
-        're-register-apps': 'Get-AppXPackage -AllUsers | Foreach {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\\AppXManifest.xml" -ErrorAction SilentlyContinue}',
-        'battery-report': 'powercfg /batteryreport /output "$env:USERPROFILE\\Desktop\\battery_report.html"; Write-Output "Battery report saved to Desktop as battery_report.html"',
-        'clean-temp': 'Remove-Item -Path "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path "$env:windir\\Temp\\*" -Recurse -Force -ErrorAction SilentlyContinue; Write-Output "Temporary files cleared successfully."',
-        'netstat': 'netstat -ano',
-        'system-uptime': 'Write-Output "System Uptime:"; (Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime',
-        'clear-event-logs': 'wevtutil el | Foreach-Object {wevtutil cl "$_"}; Write-Output "All Windows Event Logs have been cleared successfully."',
-        'reset-network-adapters': 'Get-NetAdapter | Restart-NetAdapter; Write-Output "All network adapters have been restarted."'
+        // ── Existing ──────────────────────────────────────────────────────────
+        'flush-dns':              'ipconfig /flushdns',
+        'winsock-reset':          'netsh winsock reset',
+        'gpupdate':               'gpupdate /force',
+        'system-info':            'systeminfo',
+        'task-list':              'tasklist',
+        'chkdsk':                 'chkdsk /scan',
+        'print-spooler-reset':    'Stop-Service -Name Spooler -Force; Remove-Item -Path "$env:windir\\System32\\spool\\PRINTERS\\*.*" -Force -Recurse; Start-Service -Name Spooler',
+        'wmi-rebuild':            'net stop winmgmt /y; winmgmt /resetrepository; net start winmgmt',
+        'wu-cache-clear':         'Stop-Service wuauserv, cryptSvc, bits, msiserver -Force; Remove-Item -Path "$env:windir\\SoftwareDistribution\\Download\\*" -Recurse -Force -ErrorAction SilentlyContinue; Start-Service wuauserv, cryptSvc, bits, msiserver',
+        're-register-apps':       'Get-AppXPackage -AllUsers | Foreach {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\\AppXManifest.xml" -ErrorAction SilentlyContinue}',
+        'battery-report':         'powercfg /batteryreport /output "$env:USERPROFILE\\Desktop\\battery_report.html"; Write-Output "Battery report saved to Desktop as battery_report.html"',
+        'clean-temp':             'Remove-Item -Path "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path "$env:windir\\Temp\\*" -Recurse -Force -ErrorAction SilentlyContinue; Write-Output "Temporary files cleared successfully."',
+        'netstat':                'netstat -ano',
+        'system-uptime':          'Write-Output "System Uptime:"; (Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime',
+        'clear-event-logs':       'wevtutil el | Foreach-Object {wevtutil cl "$_"}; Write-Output "All Windows Event Logs have been cleared successfully."',
+        'reset-network-adapters': 'Get-NetAdapter | Restart-NetAdapter; Write-Output "All network adapters have been restarted."',
+
+        // ── Network (new) ─────────────────────────────────────────────────────
+        'wifi-password-list':
+          `netsh wlan show profiles | Select-String 'All User Profile' | ForEach-Object { $p = ($_ -split ':')[1].Trim(); $k = (netsh wlan show profile name=$p key=clear | Select-String 'Key Content'); Write-Output "$p : $(if($k){ ($k -split ':')[1].Trim() } else { '(no password stored)' })" }`,
+        'open-ports':
+          `netstat -an | Where-Object { $_ -match 'LISTENING' } | Sort-Object | Format-Table -AutoSize`,
+        'ping-gateway':
+          `$gw = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1).NextHop; Write-Output "Default Gateway: $gw"; ping -n 4 $gw`,
+        'reset-winsock-ip':
+          `netsh winsock reset; netsh int ip reset; netsh int ipv4 reset; netsh int ipv6 reset; ipconfig /flushdns; Write-Output "Full network stack reset complete. Please reboot now."`,
+
+        // ── System Info (new) ─────────────────────────────────────────────────
+        'disk-usage':
+          `Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{N='Used(GB)';E={[math]::Round($_.Used/1GB,2)}}, @{N='Free(GB)';E={[math]::Round($_.Free/1GB,2)}}, @{N='Total(GB)';E={[math]::Round(($_.Used+$_.Free)/1GB,2)}} | Format-Table -AutoSize`,
+        'top-cpu-processes':
+          `Get-Process | Sort-Object CPU -Descending | Select-Object -First 15 Name, Id, @{N='CPU(s)';E={[math]::Round($_.CPU,1)}}, @{N='RAM(MB)';E={[math]::Round($_.WorkingSet/1MB,1)}} | Format-Table -AutoSize`,
+        'environment-vars':
+          `Get-ChildItem Env: | Sort-Object Name | Format-Table -AutoSize`,
+        'scheduled-tasks':
+          `Get-ScheduledTask | Where-Object State -ne 'Disabled' | Select-Object TaskName, State, @{N='LastRun';E={$_.LastRunTime}} | Sort-Object TaskName | Format-Table -AutoSize`,
+        'windows-license':
+          `cscript //nologo "$env:windir\\System32\\slmgr.vbs" /dli`,
+
+        // ── Repair & Maintenance (new) ────────────────────────────────────────
+        'sfc-scan':
+          `sfc /scannow`,
+        'dism-health':
+          `DISM /Online /Cleanup-Image /CheckHealth; Write-Output "---"; DISM /Online /Cleanup-Image /ScanHealth`,
+        'clear-dns-cache-browser':
+          `ipconfig /flushdns; Write-Output "Windows DNS cache flushed."; Write-Output "To clear Chrome/Edge browser DNS, visit: chrome://net-internals/#dns"`,
+        'rebuild-icon-cache':
+          `Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue; Start-Sleep 2; Remove-Item "$env:LOCALAPPDATA\\IconCache.db" -Force -ErrorAction SilentlyContinue; Remove-Item "$env:LOCALAPPDATA\\Microsoft\\Windows\\Explorer\\iconcache*" -Force -ErrorAction SilentlyContinue; Start-Process explorer; Write-Output "Icon cache rebuilt and Explorer restarted."`,
+        'disk-cleanup-silent':
+          `cleanmgr /sagerun:1; Write-Output "Disk Cleanup launched in background. It will run and close automatically."`,
+
+        // ── Security (new) ────────────────────────────────────────────────────
+        'firewall-status':
+          `Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction, DefaultOutboundAction | Format-Table -AutoSize`,
+        'defender-quick-scan':
+          `Start-MpScan -ScanType QuickScan; Write-Output "Windows Defender quick scan initiated. Check Windows Security app for progress and results."`,
+        'list-startup-items':
+          `Write-Output "=== HKCU Run Keys ==="; Get-ItemProperty HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run -ErrorAction SilentlyContinue | Format-List; Write-Output "=== HKLM Run Keys ==="; Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run -ErrorAction SilentlyContinue | Format-List`,
+        'check-pending-reboot':
+          `$reboot = $false; if (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired') { $reboot = $true; Write-Output "[!] Windows Update requires a reboot." }; if (Test-Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\PendingFileRenameOperations') { $reboot = $true; Write-Output "[!] Pending file rename operations require a reboot." }; if (-not $reboot) { Write-Output "[OK] No pending reboot required." }`
       };
       if (!presets[action]) throw new Error('Invalid quick command action');
       return presets[action];

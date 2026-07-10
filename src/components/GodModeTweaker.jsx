@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Zap, Shield, Gamepad2, List, Sparkles, ChevronRight, ChevronDown, Loader2,
-  Check, Undo2, AlertTriangle, Package, Download, Upload, Trash2, Clock,
-  ShieldCheck, Info, X, Plus
+  Zap, Shield, Gamepad2, List, Loader2,
+  Check, Undo2, Package, Download, Upload, Trash2, Clock
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';

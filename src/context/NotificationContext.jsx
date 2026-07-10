@@ -49,12 +49,14 @@ export function NotificationProvider({ children }) {
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
     }
+    // Capture ref value at effect-run time so the cleanup closure sees a stable reference.
+    const timeouts = timeoutsRef.current;
     return () => {
       // Clear any pending timeouts to avoid setState-after-unmount warnings.
-      for (const t of timeoutsRef.current) {
+      for (const t of timeouts) {
         try { clearTimeout(t); } catch (_) {}
       }
-      timeoutsRef.current.clear();
+      timeouts.clear();
     };
   }, []);
 

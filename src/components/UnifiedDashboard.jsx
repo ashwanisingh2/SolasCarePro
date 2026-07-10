@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Stethoscope, Activity, AlertTriangle, CheckCircle2, Loader2, XCircle,
-  Lightbulb, Wrench, ShieldCheck, Zap, RefreshCw, Cpu, HardDrive, Shield,
-  Network, ArrowRight, Play, Trash2, Bug, Globe2, ClipboardList
+  Stethoscope, Activity, CheckCircle2, Loader2,
+  Lightbulb, Wrench, ShieldCheck, RefreshCw, Shield, ArrowRight, Trash2, Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';
-import CommandOutput from './shared/CommandOutput';
+// Removed CommandOutput import as per user request to show progress bar instead
 
 export default function UnifiedDashboard() {
   const { addNotification } = useNotification();
@@ -26,15 +25,18 @@ export default function UnifiedDashboard() {
 
   // AutoPilot State
   const [autoPilotStatus, setAutoPilotStatus] = useState(null);
+  const [manualControl, setManualControl] = useState(false);
 
   useEffect(() => {
     if (window.api) {
       Promise.all([
         window.api.getSetting('autoPilotEnabled', false),
         window.api.getSetting('autoPilotDay', 'Sunday'),
-        window.api.getSetting('autoPilotTime', '03:00')
-      ]).then(([enabled, day, time]) => {
+        window.api.getSetting('autoPilotTime', '03:00'),
+        window.api.getSetting('manualControl', false)
+      ]).then(([enabled, day, time, manualMode]) => {
         setAutoPilotStatus({ enabled, day, time });
+        setManualControl(manualMode);
       });
     }
 
@@ -150,226 +152,339 @@ export default function UnifiedDashboard() {
   };
 
   return (
-    <div className="p-6 space-y-6 text-left select-none max-w-7xl mx-auto">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-white flex items-center gap-2">
-            <Stethoscope className="h-7 w-7 text-brand-violet" />
-            System Health Advisor
-          </h2>
-          <p className="text-sm text-slate-400">Unified diagnostic scanning, smart recommendations, and one-click fixes.</p>
-        </div>
-        
-        {autoPilotStatus && (
-          <div className="flex items-center gap-2 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-brand-border">
-            <RefreshCw className={`h-4 w-4 ${autoPilotStatus.enabled ? 'text-emerald-400 animate-spin-slow' : 'text-slate-500'}`} />
-            <div className="flex flex-col">
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">AutoPilot Status</span>
-              <span className={`text-xs font-bold ${autoPilotStatus.enabled ? 'text-emerald-400' : 'text-slate-500'}`}>
-                {autoPilotStatus.enabled ? `Active (${autoPilotStatus.day} @ ${autoPilotStatus.time})` : 'Disabled'}
-              </span>
-            </div>
+    <div className="relative min-h-screen text-left select-none overflow-hidden rounded-2xl">
+      {/* Ambient Glow Background */}
+      <div className="absolute inset-0 pointer-events-none ambient-glow-bg z-0" />
+      
+      <div className="relative z-10 p-6 space-y-8 max-w-7xl mx-auto">
+        <motion.header 
+          initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+        >
+          <div>
+            <h2 className="text-3xl font-black text-white flex items-center gap-3">
+              <div className="p-2 bg-brand-violet/20 rounded-xl neon-border-glow-violet">
+                <Stethoscope className="h-8 w-8 text-brand-violet animate-pulse-glow" />
+              </div>
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">System Health Advisor</span>
+            </h2>
+            <p className="text-sm text-slate-400 mt-2 ml-14">Unified diagnostic scanning, smart recommendations, and one-click fixes.</p>
           </div>
-        )}
-      </header>
-
-      {/* Phase Navigator */}
-      <div className="flex justify-between items-center bg-slate-900/60 p-2 rounded-xl border border-brand-border">
-        {['scan', 'recommend', 'fix'].map((step, idx) => {
-          const active = phase === step;
-          const passed = ['scan', 'recommend', 'fix'].indexOf(phase) > idx;
-          return (
-            <div key={step} className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-xs font-bold uppercase transition-all ${
-              active ? 'bg-brand-violet text-white shadow-lg' : passed ? 'text-emerald-400' : 'text-slate-500'
-            }`}>
-              {passed ? <CheckCircle2 className="h-4 w-4" /> : <Activity className="h-4 w-4" />}
-              {step} Phase
-            </div>
-          );
-        })}
-      </div>
-
-      <AnimatePresence mode="wait">
-        {/* Phase 1: SCAN */}
-        {phase === 'scan' && (
-          <motion.div key="scan" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-            <div className="glass-panel border border-brand-border rounded-xl p-8 text-center bg-slate-900/40">
-              <Activity className="h-16 w-16 text-brand-cyan mx-auto mb-4 opacity-80" />
-              <h3 className="text-xl font-bold text-slate-200 mb-2">Gathering Intelligence</h3>
-              <p className="text-sm text-slate-400 max-w-lg mx-auto mb-6">
-                The System Health Advisor will analyze hardware sensors, event logs, temporary files, and system registries to build a complete health profile.
-              </p>
-              <button onClick={runPhaseScan} disabled={loading} className="px-8 py-3 bg-brand-violet hover:bg-brand-violet/90 text-white font-bold rounded-lg flex items-center justify-center gap-3 mx-auto disabled:opacity-50">
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
-                {loading ? 'Scanning System...' : 'Start Full System Scan'}
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Phase 2: RECOMMEND */}
-        {phase === 'recommend' && (
-          <motion.div key="recommend" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Diagnostics Summary */}
-              <div className="glass-panel border border-brand-border rounded-xl p-5">
-                <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2 mb-4">
-                  <Stethoscope className="h-5 w-5 text-brand-violet" /> Diagnostics Results
-                </h3>
-                {diagnostics ? (
-                  <div className="space-y-3">
-                    <div className={`p-3 rounded border ${diagnostics.criticalCount > 0 ? 'border-rose-500/40 bg-rose-950/20 text-rose-400' : 'border-emerald-500/40 bg-emerald-950/20 text-emerald-400'}`}>
-                      <p className="font-bold">{diagnostics.overallStatus}</p>
-                    </div>
-                    {diagnostics.findings?.map((f, i) => (
-                      <div key={i} className="text-xs p-3 bg-slate-900/60 rounded border border-brand-border flex flex-col gap-1">
-                        <span className="font-bold text-slate-200">{f.diagnosis}</span>
-                        <span className="text-slate-400">{f.recommendation}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500">No diagnostics data available.</p>
-                )}
+          
+          {manualControl ? (
+            <motion.div whileHover={{ scale: 1.05 }} className="flex items-center gap-3 bg-brand-violet/10 px-4 py-2 rounded-xl border border-brand-violet/30 shadow-[0_0_15px_rgba(139,92,246,0.15)] backdrop-blur-md">
+              <ShieldCheck className="h-6 w-6 text-brand-violet" />
+              <div className="flex flex-col text-left">
+                <span className="text-[10px] text-brand-violet uppercase font-bold tracking-wider">Control Mode</span>
+                <span className="text-xs font-bold text-white">Full Manual</span>
               </div>
-
-              {/* Recommendations Summary */}
-              <div className="glass-panel border border-brand-border rounded-xl p-5">
-                <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2 mb-4">
-                  <Lightbulb className="h-5 w-5 text-amber-400" /> Smart Recommendations
-                </h3>
-                {recommendations?.recommendations?.length > 0 ? (
-                  <div className="space-y-3">
-                    {recommendations.recommendations.map((r, i) => (
-                      <div key={i} className="text-xs p-3 bg-slate-900/60 rounded border border-brand-border flex flex-col gap-1">
-                        <span className="font-bold text-slate-200">{r.title}</span>
-                        <span className="text-slate-400">{r.action}</span>
-                        {r.recipe && <span className="text-[10px] text-brand-violet font-mono mt-1">Recipe: {r.recipe}</span>}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500">System looks healthy.</p>
-                )}
+            </motion.div>
+          ) : autoPilotStatus && (
+            <motion.div whileHover={{ scale: 1.05 }} className="flex items-center gap-3 glass-panel px-4 py-2 rounded-xl">
+              <RefreshCw className={`h-5 w-5 ${autoPilotStatus.enabled ? 'text-emerald-400 animate-spin-slow' : 'text-slate-500'}`} />
+              <div className="flex flex-col text-left">
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">AutoPilot Status</span>
+                <span className={`text-xs font-bold ${autoPilotStatus.enabled ? 'text-emerald-400 neon-text-glow-emerald' : 'text-slate-500'}`}>
+                  {autoPilotStatus.enabled ? `Active (${autoPilotStatus.day} @ ${autoPilotStatus.time})` : 'Disabled'}
+                </span>
               </div>
-            </div>
+            </motion.div>
+          )}
+        </motion.header>
 
-            <div className="flex justify-center">
-              <button onClick={() => setPhase('fix')} className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg flex items-center gap-2">
-                Proceed to One-Click Fixes <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
-          </motion.div>
-        )}
+        {/* Phase Navigator */}
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex justify-between items-center glass-panel p-2 rounded-xl">
+          {['scan', 'recommend', 'fix'].map((step, idx) => {
+            const active = phase === step;
+            const passed = ['scan', 'recommend', 'fix'].indexOf(phase) > idx;
+            return (
+              <div key={step} className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-xs font-bold uppercase transition-all duration-500 ${
+                active ? 'bg-gradient-to-r from-brand-violet to-brand-cyan text-white shadow-[0_0_20px_rgba(139,92,246,0.4)] scale-[1.02]' : passed ? 'text-emerald-400' : 'text-slate-500'
+              }`}>
+                {passed ? <CheckCircle2 className="h-4 w-4 drop-shadow-md" /> : <Activity className="h-4 w-4" />}
+                {step} Phase
+              </div>
+            );
+          })}
+        </motion.div>
 
-        {/* Phase 3: FIX */}
-        {phase === 'fix' && (
-          <motion.div key="fix" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-            <div className="glass-panel border border-brand-cyan/40 bg-brand-cyan/5 rounded-xl p-4 flex items-center justify-center gap-3">
-              <ShieldCheck className="h-6 w-6 text-brand-cyan" />
-              <span className="text-sm font-bold text-brand-cyan uppercase tracking-wider">Safety Net: Creating Restore Point before fixes</span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <ActionCard 
-                title="Full System Repair" 
-                desc="Runs SFC & DISM to scan for and fix corrupted Windows core files." 
-                icon={Wrench} 
-                color="violet"
-                running={runningAction === 'Full System Repair'}
-                onClick={() => executeAction('Full System Repair', 'quick-full-system-repair')}
-              />
-              <ActionCard 
-                title="Clean Junk Files" 
-                desc={`Cleans Temp folders, caches, and logs. Will free up ${junkFiles.length} files.`} 
-                icon={Trash2} 
-                color="amber"
-                running={runningAction === 'Clean Junk'}
-                onClick={() => executeAction('Clean Junk', 'junk-clean', [JSON.stringify(junkFiles.map(f => f.Path))])}
-              />
-              <ActionCard 
-                title="Defender Scan" 
-                desc="Runs a built-in Windows Defender Quick Scan to check for active malware." 
-                icon={Shield} 
-                color="cyan"
-                running={runningAction === 'Defender Scan'}
-                onClick={() => executeAction('Defender Scan', 'defender-scan')}
-              />
-              <ActionCard 
-                title="Remove Bloatware" 
-                desc="Scans for and uninstalls useless pre-installed apps (Candy Crush, McAfee, etc)." 
-                icon={Trash2} 
-                color="rose"
-                running={runningAction === 'Remove Bloatware'}
-                onClick={() => executeAction('Remove Bloatware', 'remove-bloatware')}
-              />
-            </div>
-            
-            {recommendations?.recommendations?.map((r, i) => r.recipe && (
-              <div key={i} className="glass-panel border border-emerald-500/30 p-4 rounded-xl flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-bold text-slate-200">Recommended: {r.title}</h4>
-                  <p className="text-xs text-slate-400">Executes the "{r.recipe}" recipe</p>
+        <AnimatePresence mode="wait">
+          {/* Phase 1: SCAN */}
+          {phase === 'scan' && (
+            <motion.div key="scan" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.4 }} className="space-y-6 mt-8">
+              <div className="glass-panel border-brand-cyan/20 rounded-2xl p-12 text-center relative overflow-hidden group">
+                <div className="absolute inset-0 bg-gradient-to-b from-brand-cyan/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                <div className="relative z-10 flex flex-col items-center">
+                  <div className="relative mb-8">
+                    <div className="absolute inset-0 rounded-full animate-pulse-ring" />
+                    <Activity className="h-20 w-20 text-brand-cyan relative z-10 drop-shadow-[0_0_15px_rgba(6,182,212,0.8)]" />
+                  </div>
+                  <h3 className="text-2xl font-black text-white mb-3 tracking-wide">Gathering System Intelligence</h3>
+                  <p className="text-sm text-slate-400 max-w-lg mx-auto mb-8 leading-relaxed">
+                    The AI Health Advisor will perform a deep dive into hardware sensors, Windows event logs, temporary cache footprint, and registry integrity.
+                  </p>
+                  <motion.button 
+                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    onClick={runPhaseScan} disabled={loading} 
+                    className="px-10 py-4 bg-gradient-to-r from-brand-violet to-brand-cyan text-white font-black uppercase tracking-widest text-sm rounded-xl flex items-center justify-center gap-3 mx-auto disabled:opacity-50 shadow-[0_0_30px_rgba(139,92,246,0.4)] hover:shadow-[0_0_40px_rgba(6,182,212,0.6)] transition-all duration-300 border border-white/20"
+                  >
+                    {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+                    {loading ? 'Analyzing Architecture...' : 'Initiate Deep Scan'}
+                  </motion.button>
                 </div>
-                <button 
-                  onClick={() => executeAction(`Recipe: ${r.recipe}`, 'smart-repair-recipe', [r.recipe])}
-                  disabled={runningAction !== null}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold rounded text-white"
+              </div>
+            </motion.div>
+          )}
+
+          {/* Phase 2: RECOMMEND */}
+          {phase === 'recommend' && (
+            <motion.div key="recommend" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-8 mt-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Diagnostics Summary */}
+                <motion.div initial={{ x: -20 }} animate={{ x: 0 }} className="glass-panel border-brand-violet/20 rounded-2xl p-6 group hover:neon-border-glow-violet transition-all duration-500">
+                  <h3 className="text-lg font-black text-white flex items-center gap-3 mb-6 tracking-wide">
+                    <Stethoscope className="h-6 w-6 text-brand-violet group-hover:animate-pulse-glow" /> 
+                    Diagnostic Telemetry
+                  </h3>
+                  {diagnostics ? (
+                    <div className="space-y-4">
+                      <div className={`p-4 rounded-xl border backdrop-blur-md ${diagnostics.criticalCount > 0 ? 'border-rose-500/40 bg-rose-950/30 text-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.2)]' : 'border-emerald-500/40 bg-emerald-950/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]'}`}>
+                        <p className="font-black text-lg tracking-wide uppercase">{diagnostics.overallStatus}</p>
+                      </div>
+                      <div className="grid gap-3">
+                        {diagnostics.findings?.map((f, i) => (
+                          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} key={i} className="text-sm p-4 bg-slate-900/50 rounded-xl border border-white/5 hover:border-brand-violet/30 transition-colors flex flex-col gap-1">
+                            <span className="font-bold text-white">{f.diagnosis}</span>
+                            <span className="text-slate-400">{f.recommendation}</span>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-32 opacity-50">
+                      <Loader2 className="h-6 w-6 animate-spin text-slate-500 mb-2" />
+                      <p className="text-xs text-slate-500 uppercase tracking-widest">Processing Data...</p>
+                    </div>
+                  )}
+                </motion.div>
+
+                {/* Recommendations Summary */}
+                <motion.div initial={{ x: 20 }} animate={{ x: 0 }} className="glass-panel border-brand-cyan/20 rounded-2xl p-6 group hover:neon-border-glow-cyan transition-all duration-500">
+                  <h3 className="text-lg font-black text-white flex items-center gap-3 mb-6 tracking-wide">
+                    <Lightbulb className="h-6 w-6 text-amber-400 group-hover:animate-pulse-glow" /> 
+                    Smart Recommendations
+                  </h3>
+                  {recommendations?.recommendations?.length > 0 ? (
+                    <div className="space-y-3">
+                      {recommendations.recommendations.map((r, i) => (
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} key={i} className="text-sm p-4 bg-slate-900/50 rounded-xl border border-white/5 hover:border-brand-cyan/30 transition-colors flex flex-col gap-1 relative overflow-hidden">
+                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-brand-violet to-brand-cyan" />
+                          <span className="font-bold text-white">{r.title}</span>
+                          <span className="text-slate-400">{r.action}</span>
+                          {r.recipe && <span className="text-[10px] text-brand-cyan uppercase tracking-widest font-bold mt-2">Recipe Target: {r.recipe}</span>}
+                        </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-32 opacity-50">
+                      <ShieldCheck className="h-8 w-8 text-emerald-500 mb-2" />
+                      <p className="text-xs text-emerald-500 uppercase tracking-widest font-bold">System Optimized</p>
+                    </div>
+                  )}
+                </motion.div>
+              </div>
+
+              <div className="flex justify-center pt-4">
+                <motion.button 
+                  whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                  onClick={() => setPhase('fix')} 
+                  className="px-10 py-4 bg-emerald-600/90 hover:bg-emerald-500 text-white font-black uppercase tracking-widest text-sm rounded-xl flex items-center gap-3 shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_40px_rgba(16,185,129,0.5)] border border-emerald-400/50 transition-all duration-300"
                 >
-                  Run Recipe
+                  Proceed to Fixes <ArrowRight className="h-5 w-5" />
+                </motion.button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Phase 3: FIX */}
+          {phase === 'fix' && (
+            <motion.div key="fix" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-8 mt-4">
+              <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="glass-panel border-brand-cyan/50 bg-brand-cyan/10 rounded-2xl p-5 flex items-center justify-center gap-4 shadow-[0_0_20px_rgba(6,182,212,0.15)] relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-brand-cyan/10 to-transparent animate-[shimmer_2s_infinite]" />
+                <ShieldCheck className="h-7 w-7 text-brand-cyan animate-pulse-glow relative z-10" />
+                <span className="text-sm font-black text-brand-cyan uppercase tracking-widest relative z-10">Safety Net Active: Automatic Restore Point enabled</span>
+              </motion.div>
+
+              <motion.div 
+                initial="hidden" animate="visible"
+                variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+              >
+                <ActionCard 
+                  title="Full System Repair" 
+                  desc="Runs SFC & DISM to scan for and fix corrupted Windows core files." 
+                  icon={Wrench} 
+                  color="violet"
+                  running={runningAction === 'Full System Repair'}
+                  onClick={() => executeAction('Full System Repair', 'quick-full-system-repair')}
+                />
+                <ActionCard 
+                  title="Clean Junk Files" 
+                  desc={`Cleans Temp folders, caches, and logs. Will free up ${junkFiles.length} files.`} 
+                  icon={Trash2} 
+                  color="amber"
+                  running={runningAction === 'Clean Junk'}
+                  onClick={() => executeAction('Clean Junk', 'junk-clean', [JSON.stringify(junkFiles.map(f => f.Path))])}
+                />
+                <ActionCard 
+                  title="Defender Scan" 
+                  desc="Runs a built-in Windows Defender Quick Scan to check for active malware." 
+                  icon={Shield} 
+                  color="cyan"
+                  running={runningAction === 'Defender Scan'}
+                  onClick={() => executeAction('Defender Scan', 'defender-scan')}
+                />
+                <ActionCard 
+                  title="Remove Bloatware" 
+                  desc="Scans for and uninstalls useless pre-installed apps (Candy Crush, McAfee, etc)." 
+                  icon={Trash2} 
+                  color="rose"
+                  running={runningAction === 'Remove Bloatware'}
+                  onClick={() => executeAction('Remove Bloatware', 'remove-bloatware')}
+                />
+              </motion.div>
+              
+              {recommendations?.recommendations?.map((r, i) => r.recipe && (
+                <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 + i*0.1 }} key={i} className="glass-panel border-emerald-500/40 p-5 rounded-2xl flex items-center justify-between group hover:neon-border-glow-emerald transition-all duration-300">
+                  <div>
+                    <h4 className="text-base font-black text-white tracking-wide">Recommended: {r.title}</h4>
+                    <p className="text-xs text-emerald-400/80 font-mono mt-1">Executing specific recipe: {r.recipe}</p>
+                  </div>
+                  <motion.button 
+                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    onClick={() => executeAction(`Recipe: ${r.recipe}`, 'smart-repair-recipe', [r.recipe])}
+                    disabled={runningAction !== null}
+                    className="px-6 py-2.5 bg-emerald-600/80 hover:bg-emerald-500 text-xs font-bold uppercase tracking-widest rounded-lg text-white border border-emerald-400/50 shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                  >
+                    Run Recipe
+                  </motion.button>
+                </motion.div>
+              ))}
+
+              <ActionProgress 
+                isRunning={runningAction !== null} 
+                logs={logs} 
+                actionName={runningAction} 
+              />
+
+              <div className="flex justify-center mt-10">
+                <button onClick={() => { setPhase('scan'); setDiagnostics(null); setRecommendations(null); }} className="px-8 py-3 bg-slate-900/80 text-slate-300 font-bold uppercase tracking-widest text-xs rounded-xl border border-white/10 hover:border-white/30 hover:text-white transition-all">
+                  Start New Session
                 </button>
               </div>
-            ))}
-
-            <CommandOutput 
-              channel="care-out"
-              title="Execution Console"
-              isRunning={runningAction !== null}
-              logs={logs}
-            />
-
-            <div className="flex justify-center mt-6">
-              <button onClick={() => { setPhase('scan'); setDiagnostics(null); setRecommendations(null); }} className="px-6 py-2 bg-slate-800 text-white font-bold rounded-lg border border-brand-border hover:bg-slate-700">
-                Start Over
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
 
 function ActionCard({ title, desc, icon: Icon, color, running, onClick }) {
   const colors = {
-    violet: 'border-brand-violet/40 bg-brand-violet/10 text-brand-violet hover:bg-brand-violet/20',
-    cyan: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20',
-    amber: 'border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20',
-    rose: 'border-rose-500/40 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20',
+    violet: 'border-brand-violet/40 bg-brand-violet/5 hover:bg-brand-violet/20 text-brand-violet shadow-brand-violet',
+    cyan: 'border-brand-cyan/40 bg-brand-cyan/5 hover:bg-brand-cyan/20 text-brand-cyan shadow-brand-cyan',
+    amber: 'border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/20 text-amber-400 shadow-amber-500',
+    rose: 'border-rose-500/40 bg-rose-500/5 hover:bg-rose-500/20 text-rose-400 shadow-rose-500',
   };
   const c = colors[color] || colors.violet;
   
   return (
-    <button 
+    <motion.button 
+      variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }}
+      whileHover={{ y: -5, scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
       onClick={onClick} 
       disabled={running}
-      className={`glass-panel border rounded-xl p-5 text-left transition-colors flex flex-col justify-between min-h-[140px] cursor-pointer ${c} disabled:opacity-50`}
+      className={`glass-panel border-t-2 rounded-2xl p-6 text-left transition-all duration-300 flex flex-col justify-between min-h-40 cursor-pointer ${c} disabled:opacity-50 group hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)] relative overflow-hidden`}
     >
-      <div>
-        <Icon className="h-6 w-6 mb-3" />
-        <h4 className="text-sm font-bold text-slate-200 mb-1">{title}</h4>
-        <p className="text-[10px] text-slate-400 leading-snug">{desc}</p>
+      <div className="absolute top-0 right-0 p-4 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-150 transition-transform duration-700">
+        <Icon className="h-24 w-24" />
+      </div>
+      
+      <div className="relative z-10">
+        <Icon className="h-8 w-8 mb-4 opacity-90 group-hover:animate-pulse-glow rounded-full" />
+        <h4 className="text-base font-black text-white mb-2 tracking-wide drop-shadow-md">{title}</h4>
+        <p className="text-xs text-slate-300 leading-relaxed font-medium">{desc}</p>
       </div>
       {running && (
-        <div className="mt-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
-          <Loader2 className="h-3 w-3 animate-spin" /> Running...
+        <div className="mt-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest bg-black/30 w-max px-3 py-1.5 rounded-full backdrop-blur-md relative z-10 border border-white/10">
+          <Loader2 className="h-3 w-3 animate-spin text-white" /> <span className="text-white">Executing</span>
         </div>
       )}
-    </button>
+    </motion.button>
   );
 }
 
-// Temporary icon definition for Search since it wasn't imported from lucide-react in the top but used below
-function Search(props) {
-  return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+function ActionProgress({ isRunning, logs, actionName }) {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (!isRunning) {
+      setProgress(100);
+      const t = setTimeout(() => setProgress(0), 2000);
+      return () => clearTimeout(t);
+    }
+    
+    setProgress(0);
+    const interval = setInterval(() => {
+      setProgress(prev => {
+        if (prev < 50) return prev + Math.random() * 5;
+        if (prev < 80) return prev + Math.random() * 2;
+        if (prev < 95) return prev + Math.random() * 0.5;
+        return prev;
+      });
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [isRunning, actionName]);
+
+  if (!isRunning && progress === 0) return null;
+
+  return (
+    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-panel border-brand-violet/50 rounded-2xl p-8 mt-8 shadow-[0_0_30px_rgba(139,92,246,0.15)] neon-border-glow-violet relative overflow-hidden">
+      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 mix-blend-overlay" />
+      <div className="relative z-10 flex justify-between items-end mb-4">
+        <div className="flex flex-col">
+          <span className="text-[10px] text-brand-violet uppercase font-black tracking-widest mb-1">Live Telemetry</span>
+          <span className="text-lg font-black text-white">
+            {isRunning ? `Executing: ${actionName || 'Task'}...` : 'Execution Complete!'}
+          </span>
+        </div>
+        <span className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-br from-white to-brand-violet drop-shadow-md">
+          {Math.min(100, Math.floor(progress))}%
+        </span>
+      </div>
+      <div className="w-full bg-slate-900/80 rounded-full h-4 overflow-hidden border border-brand-violet/20 shadow-inner">
+        <motion.div 
+          className="bg-gradient-to-r from-brand-violet via-brand-cyan to-white h-full rounded-full relative" 
+          initial={{ width: 0 }}
+          animate={{ width: `${Math.min(100, progress)}%` }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+        >
+          <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_1s_infinite]" />
+        </motion.div>
+      </div>
+      {isRunning && logs.length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="mt-5 p-3 bg-black/40 border border-white/5 rounded-lg"
+        >
+          <p className="text-xs text-brand-cyan truncate font-mono tracking-wide">
+            > {logs[logs.length - 1]}
+          </p>
+        </motion.div>
+      )}
+    </motion.div>
+  );
 }

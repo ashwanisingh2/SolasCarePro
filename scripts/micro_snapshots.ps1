@@ -119,11 +119,26 @@ function Invoke-EnableSystemRestore {
         Write-AuditLog -Action 'snapshot-enable-sr' -Result 'success' -Target $sysDrive
         Write-TimedJsonResult @{
             success = $true
-            message = "System Restore enabled on $sysDrive"
+            message = "System Restore has been enabled."
         } $timer
     } catch {
-        Write-JsonError "Failed to enable System Restore: $($_.Exception.Message)" 'enable-system-restore'
-        exit 1
+        Write-AuditLog -Action 'snapshot-enable-sr' -Result 'failure' -Details $_.Exception.Message
+        Write-JsonError "Failed to enable System Restore: $($_.Exception.Message)" 'micro_snapshots'
+    }
+}
+
+function Invoke-DisableSystemRestore {
+    try {
+        $sysDrive = $env:SystemDrive + '\'
+        Disable-ComputerRestore -Drive $sysDrive -ErrorAction Stop
+        Write-AuditLog -Action 'snapshot-disable-sr' -Result 'success' -Target $sysDrive
+        Write-TimedJsonResult @{
+            success = $true
+            message = "System Snapshots disabled."
+        } $timer
+    } catch {
+        Write-AuditLog -Action 'snapshot-disable-sr' -Result 'failure' -Details $_.Exception.Message
+        Write-JsonError "Failed to disable System Restore: $($_.Exception.Message)" 'micro_snapshots'
     }
 }
 
@@ -176,8 +191,7 @@ function Invoke-CreateSnapshot {
     try {
         # Try WMI first (works on all editions)
         try {
-            $sr = [wmiclass]'SystemRestore'
-            $status = $sr.CreateRestorePoint($fullDescription, 12, 100)
+            $status = Invoke-WmiMethod -Namespace root\default -Class SystemRestore -Name CreateRestorePoint -ArgumentList @($fullDescription, 12, 100)
             if ($status.ReturnValue -eq 0) {
                 Write-Output "[SNAPSHOT] Restore point created via WMI"
             } else {
@@ -280,8 +294,7 @@ function Invoke-RestoreSnapshot {
 
     try {
         # Use WMI to initiate restore. Restore is async — actual restore happens on reboot.
-        $sr = [wmiclass]'SystemRestore'
-        $status = $sr.Restore($seq)
+        $status = Invoke-WmiMethod -Namespace root\default -Class SystemRestore -Name Restore -ArgumentList $seq
         if ($status.ReturnValue -eq 0) {
             Write-AuditLog -Action 'snapshot-restore' -Result 'success' -Target $seq -Details "Restore initiated; reboot required"
             Write-TimedJsonResult @{
@@ -405,6 +418,7 @@ try {
         'delete-snapshot'        { Invoke-DeleteSnapshot }
         'get-disk-usage'         { Invoke-GetDiskUsage }
         'enable-system-restore'  { Invoke-EnableSystemRestore }
+        'disable-system-restore' { Invoke-DisableSystemRestore }
         default {
             Write-JsonError "Invalid action: $Action" 'micro_snapshots'
         }

@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  CheckCircle, AlertTriangle, RefreshCw, XCircle, Terminal, 
-  Settings2, ArrowUpCircle, ExternalLink, Download, AppWindow, Laptop, CheckCircle2
+import { AlertTriangle, RefreshCw, XCircle, 
+  Settings2, Download, AppWindow, Laptop, CheckCircle2
 } from 'lucide-react';
-import { useNotification } from '../context/NotificationContext';
 import CommandOutput from './shared/CommandOutput';
 
 function safeJsonParse(str, fallback = []) {
@@ -29,7 +27,9 @@ function safeJsonParse(str, fallback = []) {
     
     return JSON.parse(str.trim());
   } catch (e) {
-    console.error('Failed to parse JSON:', e, 'Raw string:', str);
+    if (import.meta.env.DEV) {
+      console.error('Failed to parse JSON:', e, 'Raw string:', str);
+    }
     return fallback;
   }
 }
@@ -97,7 +97,9 @@ export default function SoftwareUpdater() {
             setTerminalLogs(prev => [...prev, ...lines]);
           }
         } catch (e) {
-          console.error('Error handling winget-out stream:', e);
+          if (import.meta.env.DEV) {
+            console.error('Error handling winget-out stream:', e);
+          }
         }
       });
 
@@ -109,7 +111,9 @@ export default function SoftwareUpdater() {
             setTerminalLogs(prev => [...prev, ...lines]);
           }
         } catch (e) {
-          console.error('Error handling care-out stream:', e);
+          if (import.meta.env.DEV) {
+            console.error('Error handling care-out stream:', e);
+          }
         }
       });
     }

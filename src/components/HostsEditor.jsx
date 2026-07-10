@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, ShieldAlert, Plus, RefreshCw, Save } from 'lucide-react';
+import { Loader2, ShieldAlert, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';
 
@@ -102,6 +102,42 @@ export default function HostsEditor() {
     setNewDomain('');
   };
 
+  const removeEntry = async (indexToRemove) => {
+    const ok = await confirm({
+      title: 'Remove Hosts Entry',
+      message: 'Are you sure you want to remove this line?',
+      confirmLabel: 'Remove',
+      danger: true
+    });
+    if (!ok) return;
+    
+    setLoading(true);
+    try {
+      const newLines = hostsLines.filter((_, idx) => idx !== indexToRemove);
+      const newContent = newLines.join('\n');
+      
+      if (window.api) {
+        const res = await window.api.runSystemCommand('run-advanced-tool', ['write-hosts', newContent]);
+        const m = res.stdout?.match(/\{[\s\S]*\}/);
+        const obj = m ? JSON.parse(m[m.length-1]) : null;
+        if (obj?.success) {
+          addNotification('Hosts Editor', `Entry removed successfully.`, 'success');
+          await fetchHosts();
+        } else {
+          addNotification('Hosts Editor', obj?.message || 'Failed to remove entry.', 'error');
+        }
+      } else {
+        await new Promise(r => setTimeout(r, 300));
+        addNotification('Hosts Editor', `Mock entry removed.`, 'success');
+        setHostsLines(newLines);
+      }
+    } catch (e) {
+      addNotification('Hosts Editor', e.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-5 text-left">
       <header className="flex justify-between items-center gap-3">
@@ -181,11 +217,26 @@ export default function HostsEditor() {
           </div>
         ) : (
           <div className="max-h-64 overflow-y-auto bg-black/60 border border-slate-800 rounded p-3 font-mono text-[10px] text-slate-300">
-            {hostsLines.map((line, i) => (
-              <div key={i} className={line.trim().startsWith('#') ? 'text-slate-500' : 'text-emerald-300'}>
-                {line || ' '}
-              </div>
-            ))}
+            {hostsLines.map((line, i) => {
+              const isComment = line.trim().startsWith('#');
+              const isEssential = line.trim() === '127.0.0.1 localhost' || line.trim() === '::1 localhost';
+              const canDelete = line.trim() && !isEssential;
+              
+              return (
+                <div key={i} className={`flex items-center justify-between hover:bg-slate-800/50 px-2 py-0.5 rounded transition-colors ${isComment ? 'text-slate-500' : 'text-emerald-300'}`}>
+                  <span className="truncate pr-2">{line || ' '}</span>
+                  {canDelete && (
+                    <button 
+                      onClick={() => removeEntry(i)} 
+                      className="text-slate-500 hover:text-rose-400 p-1 bg-slate-900/50 hover:bg-rose-950 rounded cursor-pointer shrink-0 transition-colors" 
+                      title="Remove Entry"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

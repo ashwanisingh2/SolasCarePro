@@ -4,7 +4,7 @@ import {
   ShieldCheck, Terminal, Clock, CalendarDays, Trash2,
   AlertTriangle, CheckCircle2, ChevronRight, X, Search
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { formatDate } from '../utils/formatters';
 import { useDebounced } from '../utils/hooks';
 

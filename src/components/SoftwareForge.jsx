@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Package, Code, Book, Video, Zap, Globe, Shield, MessageSquare, Video as VideoIcon,
-  Archive, Search, File, Image, Audio, Terminal, GitBranch, Check, Loader2,
-  RefreshCw, Download, Trash2, HardDrive, RotateCcw, AlertTriangle, Info, X,
-  Sparkles, Server, Play, ShoppingBag, AlertCircle
+  Package, Code, Video, Zap, Globe, MessageSquare, Search, File, Check, Loader2,
+  RefreshCw, Download, Trash2, HardDrive, RotateCcw,
+  Sparkles, ShoppingBag, AlertCircle
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';

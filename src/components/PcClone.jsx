@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Copy, Upload, Download, Lock, Key, Loader2, RefreshCw, HardDrive, Wifi,
-  Package, SlidersHorizontal, Briefcase, X, Eye, EyeOff, Check, AlertTriangle,
-  Info, Clock, FileText
+  Copy, Upload, Download, Lock, Loader2, RefreshCw, Wifi,
+  Package, SlidersHorizontal, Briefcase, X, Eye, EyeOff, AlertTriangle,
+  Info, Clock
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';
@@ -35,16 +35,56 @@ function formatBytes(b) {
 
 export default function PcClone() {
   const { addNotification } = useNotification();
-  const confirm = useConfirm();
+  const _confirm = useConfirm();
   const [exportableItems, setExportableItems] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState({ stage: '', percent: 0, message: '' });
   const [showOutput, setShowOutput] = useState(false);
   const [activeTab, setActiveTab] = useState('export'); // 'export' | 'import' | 'history'
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const cancelRef = useRef(false);
+
+  const cancelOperation = async () => {
+    cancelRef.current = true;
+    // Kill any active PowerShell process
+    if (window.api?.killActiveProcess) {
+      try {
+        await window.api.killActiveProcess();
+      } catch (e) {
+        console.error('Failed to kill process:', e);
+      }
+    }
+    
+    setExporting(false);
+    setImporting(false);
+    setProgress({ stage: '', percent: 0, message: '' });
+    setShowExportModal(false);
+    setShowImportModal(false);
+    addNotification('PC Clone', 'Operation cancelled or closed by user', 'info');
+  };
+
+  useEffect(() => {
+    if (!window.api?.onStream) return undefined;
+    return window.api.onStream('care-out', (data) => {
+      const text = typeof data === 'string' ? data : data.text || '';
+      const match = text.match(/\[CLONE\]\s*(.+)/i);
+      if (match) {
+        const msg = match[1];
+        setProgress(p => {
+          let percent = p.percent;
+          if (msg.includes('Step 1/4')) percent = 25;
+          else if (msg.includes('Step 2/4')) percent = 50;
+          else if (msg.includes('Step 3/4')) percent = 75;
+          else if (msg.includes('Step 4/4')) percent = 90;
+          return { ...p, message: msg, percent: percent > p.percent ? percent : p.percent };
+        });
+      }
+    });
+  }, []);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -75,7 +115,7 @@ export default function PcClone() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const handleExport = async ({ password, includeApps, includeWifi, includeWorkspaces, includeTweaks, savePath }) => {
+  const handleExport = async ({ password, _includeApps, _includeWifi, _includeWorkspaces, _includeTweaks, savePath }) => {
     if (!password || password.length < 4) {
       addNotification('PC Clone', 'Password must be at least 4 chars.', 'error');
       return;
@@ -86,25 +126,35 @@ export default function PcClone() {
     }
     setExporting(true);
     setShowOutput(true);
+    setProgress({ stage: 'export', percent: 10, message: 'Preparing export...' });
+    
     try {
       if (window.api) {
         // Step 1: PS exports raw JSON to a temp file
-        const os = require('os');
-        const tempJsonPath = `${os.tmpdir ? '' : ''}C:\\Users\\${process.env.USERNAME || 'mock'}\\AppData\\Local\\Temp\\solas_clone_export_${Date.now()}.json`;
-        // Use a real temp path via window.api.openSaveDialog if available, else fallback
-        const res = await window.api.runSystemCommand('run-clone-tool', ['export-clone', tempJsonPath]);
+        setProgress({ stage: 'export', percent: 30, message: 'Collecting system data...' });
+        const tempJsonPath = `C:\\Users\\${window.api.getUsername?.() || 'User'}\\AppData\\Local\\Temp\\solas_clone_export_${Date.now()}.json`;
+        
+        const res = await window.api.runSystemCommand('run-clone-tool', ['export-clone', tempJsonPath], { bypassConfirmation: true });
         const obj = safeJsonParse(res.stdout);
+        
         if (!obj?.success) {
           addNotification('PC Clone', obj?.error || 'Export failed.', 'error');
+          setProgress({ stage: '', percent: 0, message: '' });
           return;
         }
+        
         // Step 2: JS encrypts temp JSON to .solasclone
+        setProgress({ stage: 'export', percent: 60, message: 'Encrypting data (AES-256)...' });
         const encRes = await window.api.cloneEncryptFile(tempJsonPath, savePath, password);
+        
         if (!encRes.success) {
           addNotification('PC Clone', encRes.error || 'Encryption failed.', 'error');
+          setProgress({ stage: '', percent: 0, message: '' });
           return;
         }
+        
         // Step 3: Log to history
+        setProgress({ stage: 'export', percent: 90, message: 'Saving history...' });
         await window.api.cloneAppendHistory({
           ts: new Date().toISOString(),
           action: 'export',
@@ -112,16 +162,27 @@ export default function PcClone() {
           bytes: encRes.bytesWritten,
           counts: obj.counts
         });
+        
+        setProgress({ stage: 'export', percent: 100, message: 'Export complete!' });
         addNotification('PC Clone',
           `Clone exported to ${savePath} (${formatBytes(encRes.bytesWritten)}). Apps: ${obj.counts.wingetApps}, Wi-Fi: ${obj.counts.wifiProfiles}, Workspaces: ${obj.counts.solasWorkspaces}.`,
           'success');
-        setShowExportModal(false);
+        
+        setTimeout(() => {
+          setShowExportModal(false);
+          setProgress({ stage: '', percent: 0, message: '' });
+        }, 1000);
+        
         await fetchAll();
       }
     } catch (e) {
-      addNotification('PC Clone', e.message, 'error');
+      if (!cancelRef.current) {
+        addNotification('PC Clone', e.message, 'error');
+      }
+      setProgress({ stage: '', percent: 0, message: '' });
     } finally {
-      setExporting(false);
+      setTimeout(() => setExporting(false), 1000);
+      cancelRef.current = false;
     }
   };
 
@@ -136,21 +197,31 @@ export default function PcClone() {
     }
     setImporting(true);
     setShowOutput(true);
+    setProgress({ stage: 'import', percent: 10, message: 'Preparing import...' });
+    
     try {
       if (window.api) {
         // Step 1: JS decrypts .solasclone to temp JSON
+        setProgress({ stage: 'import', percent: 30, message: 'Decrypting file...' });
         const decRes = await window.api.cloneDecryptFile(clonePath, password);
+        
         if (!decRes.success) {
           addNotification('PC Clone', decRes.error || 'Decryption failed (wrong password?).', 'error');
+          setProgress({ stage: '', percent: 0, message: '' });
           return;
         }
+        
         // Step 2: PS imports from decrypted JSON
+        setProgress({ stage: 'import', percent: 50, message: 'Restoring data (this may take several minutes)...' });
         const cfg = { installApps, restoreWifi, restoreWorkspaces, restoreTweaks };
         const res = await window.api.runSystemCommand('run-clone-tool',
-          ['import-clone', decRes.tempJsonPath, JSON.stringify(cfg)]);
+          ['import-clone', decRes.tempJsonPath, JSON.stringify(cfg)], { bypassConfirmation: true });
         const obj = safeJsonParse(res.stdout);
+        
         // Step 3: Clean up temp file
+        setProgress({ stage: 'import', percent: 90, message: 'Cleaning up...' });
         await window.api.cloneCleanupTemp(decRes.tempJsonPath);
+        
         if (obj?.success) {
           const r = obj.results || {};
           await window.api.cloneAppendHistory({
@@ -159,19 +230,31 @@ export default function PcClone() {
             path: clonePath,
             results: r
           });
+          
+          setProgress({ stage: 'import', percent: 100, message: 'Import complete!' });
           addNotification('PC Clone',
             `Import complete. Apps: ${r.appsInstalled}/${r.appsFailed}, Wi-Fi: ${r.wifiRestored}, Workspaces: ${r.workspacesRestored}, Tweak entries: ${r.tweaksApplied}.`,
             r.appsFailed > 0 ? 'warning' : 'success');
-          setShowImportModal(false);
+          
+          setTimeout(() => {
+            setShowImportModal(false);
+            setProgress({ stage: '', percent: 0, message: '' });
+          }, 1000);
+          
           await fetchAll();
         } else {
           addNotification('PC Clone', obj?.error || 'Import failed.', 'error');
+          setProgress({ stage: '', percent: 0, message: '' });
         }
       }
     } catch (e) {
-      addNotification('PC Clone', e.message, 'error');
+      if (!cancelRef.current) {
+        addNotification('PC Clone', e.message, 'error');
+      }
+      setProgress({ stage: '', percent: 0, message: '' });
     } finally {
-      setImporting(false);
+      setTimeout(() => setImporting(false), 1000);
+      cancelRef.current = false;
     }
   };
 
@@ -310,13 +393,13 @@ export default function PcClone() {
       )}
 
       {showExportModal && (
-        <ExportModal onExport={handleExport} onCancel={() => setShowExportModal(false)}
-          isExporting={exporting} defaultPath={`C:\\Users\\${process.env.USERNAME || 'user'}\\Desktop\\my-pc.solasclone`} />
+        <ExportModal onExport={handleExport} onCancel={cancelOperation}
+          isExporting={exporting} progress={progress} defaultPath={`C:\\Users\\User\\Desktop\\my-pc.solasclone`} />
       )}
 
       {showImportModal && (
-        <ImportModal onImport={handleImport} onCancel={() => setShowImportModal(false)}
-          isImporting={importing} />
+        <ImportModal onImport={handleImport} onCancel={cancelOperation}
+          isImporting={importing} progress={progress} />
       )}
     </div>
   );
@@ -345,7 +428,7 @@ function ItemCard({ icon: Icon, label, count, color, available }) {
 
 // --- Export Modal ---
 
-function ExportModal({ onExport, onCancel, isExporting, defaultPath }) {
+function ExportModal({ onExport, onCancel, isExporting, progress, defaultPath }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [savePath, setSavePath] = useState(defaultPath);
@@ -366,19 +449,42 @@ function ExportModal({ onExport, onCancel, isExporting, defaultPath }) {
       }
     }
   };
+  
+  const handleCancelClick = () => {
+    onCancel();
+  };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onCancel}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" 
+      onClick={handleCancelClick}>
       <div className="glass-panel border border-brand-border rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
             <Upload className="h-4 w-4 text-brand-violet" /> Export Clone
           </h3>
-          <button onClick={onCancel} className="text-slate-500 hover:text-white cursor-pointer">
-            <X className="h-4 w-4" />
-          </button>
+          {!isExporting && (
+            <button onClick={onCancel} className="text-slate-500 hover:text-white cursor-pointer">
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
+
+        {/* Progress Indicator */}
+        {isExporting && progress.stage === 'export' && (
+          <div className="mb-4 p-3 bg-brand-violet/10 border border-brand-violet/30 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-200">{progress.message}</span>
+              <span className="text-xs font-mono text-brand-violet">{progress.percent}%</span>
+            </div>
+            <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-brand-violet to-brand-cyan transition-all duration-500"
+                style={{ width: `${progress.percent}%` }}
+              ></div>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-3">
           <div>
@@ -425,16 +531,26 @@ function ExportModal({ onExport, onCancel, isExporting, defaultPath }) {
         </div>
 
         <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-brand-border">
-          <button onClick={onCancel}
-            className="px-4 py-2 text-xs font-bold rounded-lg border border-brand-border text-slate-300 hover:bg-slate-800/60 cursor-pointer">
-            Cancel
-          </button>
-          <button onClick={() => onExport({ password, includeApps, includeWifi, includeWorkspaces, includeTweaks, savePath })}
-            disabled={isExporting || !password || password.length < 4 || !savePath}
-            className="px-4 py-2 bg-brand-violet hover:bg-brand-violet/80 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer">
-            {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lock className="h-3.5 w-3.5" />}
-            {isExporting ? 'Exporting...' : 'Export & Encrypt'}
-          </button>
+          {isExporting && (
+            <button onClick={onCancel}
+              className="px-4 py-2 text-xs font-bold rounded-lg border border-rose-500/50 text-rose-400 hover:bg-rose-500/10 cursor-pointer">
+              Cancel Operation
+            </button>
+          )}
+          {!isExporting && (
+            <>
+              <button onClick={onCancel}
+                className="px-4 py-2 text-xs font-bold rounded-lg border border-brand-border text-slate-300 hover:bg-slate-800/60 cursor-pointer">
+                Cancel
+              </button>
+              <button onClick={() => onExport({ password, includeApps, includeWifi, includeWorkspaces, includeTweaks, savePath })}
+                disabled={!password || password.length < 4 || !savePath}
+                className="px-4 py-2 bg-brand-violet hover:bg-brand-violet/80 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer">
+                <Lock className="h-3.5 w-3.5" />
+                Export & Encrypt
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -443,7 +559,7 @@ function ExportModal({ onExport, onCancel, isExporting, defaultPath }) {
 
 // --- Import Modal ---
 
-function ImportModal({ onImport, onCancel, isImporting }) {
+function ImportModal({ onImport, onCancel, isImporting, progress }) {
   const [clonePath, setClonePath] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -463,19 +579,47 @@ function ImportModal({ onImport, onCancel, isImporting }) {
       }
     }
   };
+  
+  const handleCancelClick = () => {
+    onCancel();
+  };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onCancel}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" 
+      onClick={handleCancelClick}>
       <div className="glass-panel border border-brand-border rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
             <Download className="h-4 w-4 text-brand-violet" /> Import Clone
           </h3>
-          <button onClick={onCancel} className="text-slate-500 hover:text-white cursor-pointer">
-            <X className="h-4 w-4" />
-          </button>
+          {!isImporting && (
+            <button onClick={onCancel} className="text-slate-500 hover:text-white cursor-pointer">
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
+
+        {/* Progress Indicator */}
+        {isImporting && progress.stage === 'import' && (
+          <div className="mb-4 p-3 bg-brand-cyan/10 border border-brand-cyan/30 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-200">{progress.message}</span>
+              <span className="text-xs font-mono text-brand-cyan">{progress.percent}%</span>
+            </div>
+            <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-brand-cyan to-emerald-400 transition-all duration-500"
+                style={{ width: `${progress.percent}%` }}
+              ></div>
+            </div>
+            {progress.percent >= 50 && (
+              <p className="text-[10px] text-slate-500 mt-2">
+                Installing apps may take several minutes. Please be patient...
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="space-y-3">
           <div>
@@ -521,16 +665,26 @@ function ImportModal({ onImport, onCancel, isImporting }) {
         </div>
 
         <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-brand-border">
-          <button onClick={onCancel}
-            className="px-4 py-2 text-xs font-bold rounded-lg border border-brand-border text-slate-300 hover:bg-slate-800/60 cursor-pointer">
-            Cancel
-          </button>
-          <button onClick={() => onImport({ clonePath, password, installApps, restoreWifi, restoreWorkspaces, restoreTweaks })}
-            disabled={isImporting || !clonePath || !password}
-            className="px-4 py-2 bg-brand-violet hover:bg-brand-violet/80 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer">
-            {isImporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            {isImporting ? 'Importing...' : 'Decrypt & Import'}
-          </button>
+          {isImporting && (
+            <button onClick={onCancel}
+              className="px-4 py-2 text-xs font-bold rounded-lg border border-rose-500/50 text-rose-400 hover:bg-rose-500/10 cursor-pointer">
+              Cancel Operation
+            </button>
+          )}
+          {!isImporting && (
+            <>
+              <button onClick={onCancel}
+                className="px-4 py-2 text-xs font-bold rounded-lg border border-brand-border text-slate-300 hover:bg-slate-800/60 cursor-pointer">
+                Cancel
+              </button>
+              <button onClick={() => onImport({ clonePath, password, installApps, restoreWifi, restoreWorkspaces, restoreTweaks })}
+                disabled={!clonePath || !password}
+                className="px-4 py-2 bg-brand-violet hover:bg-brand-violet/80 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer">
+                <Download className="h-3.5 w-3.5" />
+                Decrypt & Import
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

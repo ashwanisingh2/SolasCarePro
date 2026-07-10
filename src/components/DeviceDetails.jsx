@@ -3,7 +3,7 @@ import {
   Monitor, Cpu, HardDrive, MemoryStick, Server, Zap, RefreshCw, Loader2, Info,
   CircuitBoard, MonitorPlay, BatteryCharging, Wifi, Shield, Boxes, Package, DownloadCloud,
   Users, Activity, Bluetooth, AlertTriangle, Radio, ChevronDown, ChevronRight,
-  Search, FileJson, FileSpreadsheet, Printer, FileText
+  Search, FileJson, FileSpreadsheet, Printer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNotification } from '../context/NotificationContext';
@@ -123,8 +123,19 @@ export default function DeviceDetails() {
   const [activeTab, setActiveTab] = useState('details');
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState({}); // section key -> true if collapsed
+  const [isInitialLoad, setIsInitialLoad] = useState(true); // Track first load
+  const [lastFetchTime, setLastFetchTime] = useState(0); // Cache timestamp
 
-  const fetchDetails = async () => {
+  const fetchDetails = async (forceRefresh = false) => {
+    // Cache for 5 minutes to avoid repeated slow fetches
+    const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+    const now = Date.now();
+    
+    if (!forceRefresh && deviceInfo && (now - lastFetchTime < CACHE_DURATION)) {
+      addNotification('Device Details', 'Using cached data (refresh to get latest)', 'info');
+      return;
+    }
+    
     setError(null);
     setLoadingInfo(true);
     try {
@@ -132,6 +143,7 @@ export default function DeviceDetails() {
         const res = await window.api.runSystemCommand('get-device-details');
         if (res.success && res.stdout) {
           setDeviceInfo(JSON.parse(res.stdout));
+          setLastFetchTime(now);
         } else {
           throw new Error(res.error || 'Failed to fetch device details.');
         }
@@ -140,6 +152,7 @@ export default function DeviceDetails() {
       setError(e.message);
     } finally {
       setLoadingInfo(false);
+      setIsInitialLoad(false);
     }
   };
 
@@ -154,15 +167,24 @@ export default function DeviceDetails() {
         }
       }
     } catch (e) {
-      console.error(e);
+      if (import.meta.env.DEV) {
+        console.error(e);
+      }
     } finally {
       setLoadingSoftware(false);
     }
   };
 
   useEffect(() => {
+    // Fetch basic details immediately
     fetchDetails();
-    fetchSoftware();
+    
+    // Defer software fetch by 500ms to avoid blocking UI
+    const softwareTimer = setTimeout(() => {
+      fetchSoftware();
+    }, 500);
+    
+    return () => clearTimeout(softwareTimer);
   }, []);
 
   const toggleSection = (key) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
@@ -171,6 +193,18 @@ export default function DeviceDetails() {
     SECTIONS.forEach(s => { next[s.key] = collapse; });
     setCollapsed(next);
   };
+
+  // Initialize collapsed state - only expand first 3 sections by default
+  useEffect(() => {
+    if (deviceInfo && Object.keys(collapsed).length === 0) {
+      const initialCollapsed = {};
+      SECTIONS.forEach((s, idx) => {
+        // Expand only first 3 sections (Basic, OS, CPU)
+        initialCollapsed[s.key] = idx >= 3;
+      });
+      setCollapsed(initialCollapsed);
+    }
+  }, [deviceInfo]);
 
   // ---- Exports (client-side blob download; works in the Electron renderer) ----
   const download = (filename, content, mime) => {
@@ -231,7 +265,7 @@ export default function DeviceDetails() {
             className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 text-xs font-bold rounded-lg cursor-pointer transition-colors">
             <Printer className="h-4 w-4" /> PDF
           </button>
-          <button onClick={() => { fetchDetails(); fetchSoftware(); }} disabled={loadingInfo} title="Refresh"
+          <button onClick={() => { fetchDetails(true); fetchSoftware(); }} disabled={loadingInfo} title="Refresh"
             className="flex items-center gap-1.5 px-3 py-2 bg-brand-violet hover:bg-brand-violet/85 disabled:opacity-40 text-white text-xs font-bold rounded-lg cursor-pointer transition-colors">
             <RefreshCw className={`h-4 w-4 ${loadingInfo ? 'animate-spin' : ''}`} /> Refresh
           </button>
@@ -272,15 +306,39 @@ export default function DeviceDetails() {
               )}
 
               {loadingInfo ? (
-                <div className="glass-panel border border-brand-border rounded-xl p-12 text-center space-y-3">
-                  <Loader2 className="h-6 w-6 animate-spin text-brand-violet mx-auto" />
-                  <p className="text-xs text-slate-500 font-semibold animate-pulse">Scanning system components... (this can take up to a minute)</p>
-                </div>
+                isInitialLoad ? (
+                  // Skeleton loader for initial load
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <div key={i} className="glass-panel border border-brand-border rounded-xl p-5 animate-pulse">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-8 h-8 bg-slate-800 rounded-lg"></div>
+                          <div className="h-4 bg-slate-800 rounded w-32"></div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-3 bg-slate-800/60 rounded w-full"></div>
+                          <div className="h-3 bg-slate-800/60 rounded w-5/6"></div>
+                          <div className="h-3 bg-slate-800/60 rounded w-4/6"></div>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="text-center mt-4">
+                      <p className="text-xs text-slate-500 font-semibold">Loading device information...</p>
+                      <p className="text-xs text-slate-600 mt-1">This may take 10-30 seconds on first load</p>
+                    </div>
+                  </div>
+                ) : (
+                  // Simple spinner for refresh
+                  <div className="glass-panel border border-brand-border rounded-xl p-12 text-center space-y-3">
+                    <Loader2 className="h-6 w-6 animate-spin text-brand-violet mx-auto" />
+                    <p className="text-xs text-slate-500 font-semibold animate-pulse">Refreshing device information...</p>
+                  </div>
+                )
               ) : error ? (
                 <div className="glass-panel border border-rose-500/30 rounded-xl p-8 text-center space-y-3">
                   <AlertTriangle className="h-8 w-8 text-rose-400 mx-auto" />
                   <p className="text-rose-400 text-sm font-bold">{error}</p>
-                  <button onClick={fetchDetails} className="text-xs px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white cursor-pointer">Retry</button>
+                  <button onClick={() => fetchDetails(true)} className="text-xs px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white cursor-pointer">Retry</button>
                 </div>
               ) : deviceInfo ? (
                 <div className="space-y-3">

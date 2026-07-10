@@ -1,27 +1,52 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Terminal, Play, Loader2, AlertCircle, RefreshCw, XCircle, Trash2, Code } from 'lucide-react';
+import { Terminal, Play, Loader2, XCircle, Trash2 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useConfirm } from './shared/ConfirmModal';
 
 // `danger: true` scripts change system state (wipe logs, drop network, stop
 // services, delete files) and prompt for confirmation before running.
 const SCRIPTS = [
-  { id: 'flush-dns', name: 'Flush DNS Cache', desc: 'Resolves website loading issues by clearing DNS cache.', type: 'network' },
-  { id: 'winsock-reset', name: 'Winsock Reset', desc: 'Resets network adapters and TCP/IP stack.', type: 'network', danger: true },
-  { id: 'gpupdate', name: 'Force Group Policy Update', desc: 'Forces an immediate update of group policies (gpupdate /force).', type: 'system' },
-  { id: 'system-info', name: 'System Info Report', desc: 'Generates a detailed system hardware and OS report via CMD.', type: 'system' },
-  { id: 'task-list', name: 'Active Processes', desc: 'Lists all currently running processes and services via CMD.', type: 'system' },
-  { id: 'chkdsk', name: 'Quick Check Disk', desc: 'Scans the file system for logical errors (chkdsk /scan).', type: 'repair' },
-  { id: 'print-spooler-reset', name: 'Reset Print Spooler', desc: 'Fixes stuck printing jobs by clearing the spooler queue.', type: 'repair', danger: true },
-  { id: 'wmi-rebuild', name: 'Rebuild WMI Repository', desc: 'Fixes Windows Management Instrumentation corruption.', type: 'repair', danger: true },
-  { id: 'wu-cache-clear', name: 'Clear Windows Update Cache', desc: 'Fixes stuck updates by clearing the SoftwareDistribution folder.', type: 'repair', danger: true },
-  { id: 're-register-apps', name: 'Re-register Store Apps', desc: 'Repairs broken or missing Windows 10/11 default apps.', type: 'repair', danger: true },
-  { id: 'battery-report', name: 'Generate Battery Report', desc: 'Creates an HTML report of battery health on your Desktop.', type: 'system' },
-  { id: 'clean-temp', name: 'Clean Temporary Files', desc: 'Force deletes files in system and user Temp directories.', type: 'system', danger: true },
-  { id: 'netstat', name: 'Network Connections (Netstat)', desc: 'Lists active TCP connections and listening ports.', type: 'network' },
-  { id: 'system-uptime', name: 'System Uptime Check', desc: 'Shows the exact time elapsed since the last system boot.', type: 'system' },
-  { id: 'clear-event-logs', name: 'Clear All Event Logs', desc: 'Wipes all Windows Event Viewer logs (including crash & BSOD history).', type: 'system', danger: true },
-  { id: 'reset-network-adapters', name: 'Restart Network Adapters', desc: 'Disables and re-enables all physical and virtual network adapters.', type: 'network', danger: true }
+  // ── Network ─────────────────────────────────────────────────────────────────
+  { id: 'flush-dns',              name: 'Flush DNS Cache',              desc: 'Resolves website loading issues by clearing the local DNS resolver cache.',          type: 'network' },
+  { id: 'winsock-reset',          name: 'Winsock Reset',                desc: 'Resets network adapters and the TCP/IP stack. Reboot required after.',               type: 'network', danger: true },
+  { id: 'netstat',                name: 'Network Connections (Netstat)',  desc: 'Lists all active TCP connections and currently listening ports.',                    type: 'network' },
+  { id: 'reset-network-adapters', name: 'Restart Network Adapters',     desc: 'Disables and re-enables all physical and virtual network adapters.',                  type: 'network', danger: true },
+  { id: 'wifi-password-list',     name: 'Show Saved Wi-Fi Passwords',   desc: 'Lists all saved Wi-Fi profiles with their stored passwords.',                        type: 'network' },
+  { id: 'open-ports',             name: 'Open Ports Scanner',           desc: 'Shows all TCP/UDP ports currently in LISTENING state on this machine.',               type: 'network' },
+  { id: 'ping-gateway',           name: 'Ping Default Gateway',         desc: 'Detects the default router IP and pings it 4 times to check local connectivity.',    type: 'network' },
+  { id: 'reset-winsock-ip',       name: 'Full Network Stack Reset',     desc: 'Resets Winsock, IPv4, IPv6, and flushes DNS — the nuclear option for network issues. Reboot required.', type: 'network', danger: true },
+
+  // ── System Info ─────────────────────────────────────────────────────────────
+  { id: 'system-info',            name: 'System Info Report',           desc: 'Generates a detailed system hardware and OS report via systeminfo.',                  type: 'system' },
+  { id: 'task-list',              name: 'Active Processes',             desc: 'Lists all currently running processes and services.',                                  type: 'system' },
+  { id: 'system-uptime',          name: 'System Uptime Check',          desc: 'Shows the exact time elapsed since the last Windows boot.',                           type: 'system' },
+  { id: 'battery-report',         name: 'Generate Battery Report',      desc: 'Creates an HTML battery health report saved to your Desktop.',                        type: 'system' },
+  { id: 'gpupdate',               name: 'Force Group Policy Update',    desc: 'Forces an immediate update of all group policies (gpupdate /force).',                 type: 'system' },
+  { id: 'disk-usage',             name: 'Disk Space Usage',             desc: 'Shows used, free, and total space for every drive on this machine.',                  type: 'system' },
+  { id: 'top-cpu-processes',      name: 'Top CPU Processes',            desc: 'Lists top 15 processes by CPU and RAM usage in real time.',                          type: 'system' },
+  { id: 'environment-vars',       name: 'Environment Variables',        desc: 'Prints all system and user environment variables (PATH, TEMP, etc.).',                type: 'system' },
+  { id: 'scheduled-tasks',        name: 'Active Scheduled Tasks',       desc: 'Lists all non-disabled Windows Scheduled Tasks with their last run time.',            type: 'system' },
+  { id: 'windows-license',        name: 'Windows License Status',       desc: 'Shows Windows activation status, product key channel, and expiry.',                   type: 'system' },
+  { id: 'clean-temp',             name: 'Clean Temporary Files',        desc: 'Force deletes all files in %TEMP% and Windows\\Temp directories.',                    type: 'system', danger: true },
+  { id: 'clear-event-logs',       name: 'Clear All Event Logs',         desc: 'Wipes every Windows Event Viewer log including crash and BSOD history.',             type: 'system', danger: true },
+
+  // ── Repair & Maintenance ────────────────────────────────────────────────────
+  { id: 'chkdsk',                 name: 'Quick Check Disk',             desc: 'Scans the file system for logical errors (chkdsk /scan, non-destructive).',          type: 'repair' },
+  { id: 'sfc-scan',               name: 'System File Checker (SFC)',    desc: 'Scans and repairs corrupted Windows system files (sfc /scannow). Takes 5-10 min.',   type: 'repair' },
+  { id: 'dism-health',            name: 'DISM Health Check',            desc: 'Runs DISM CheckHealth + ScanHealth to detect Windows image corruption.',              type: 'repair' },
+  { id: 'print-spooler-reset',    name: 'Reset Print Spooler',          desc: 'Stops spooler, clears stuck print jobs, and restarts the service.',                  type: 'repair', danger: true },
+  { id: 'wmi-rebuild',            name: 'Rebuild WMI Repository',       desc: 'Fixes Windows Management Instrumentation corruption — resolves many PS script failures.', type: 'repair', danger: true },
+  { id: 'wu-cache-clear',         name: 'Clear Windows Update Cache',   desc: 'Clears SoftwareDistribution folder to fix stuck or failed Windows Updates.',         type: 'repair', danger: true },
+  { id: 're-register-apps',       name: 'Re-register Store Apps',       desc: 'Repairs broken or missing Windows 10/11 built-in apps via AppX re-registration.',    type: 'repair', danger: true },
+  { id: 'rebuild-icon-cache',     name: 'Rebuild Icon Cache',           desc: 'Kills Explorer, clears IconCache.db, and restarts Explorer — fixes blank/corrupt icons.', type: 'repair', danger: true },
+  { id: 'disk-cleanup-silent',    name: 'Run Disk Cleanup (Silent)',    desc: 'Launches Windows built-in Disk Cleanup in background (cleanmgr /sagerun:1).',        type: 'repair' },
+  { id: 'clear-dns-cache-browser', name: 'Flush DNS + Browser Hint',   desc: 'Flushes Windows DNS cache and prints the Chrome/Edge URL to clear browser DNS too.', type: 'repair' },
+
+  // ── Security ─────────────────────────────────────────────────────────────────
+  { id: 'firewall-status',        name: 'Firewall Rules Summary',       desc: 'Shows inbound/outbound default actions for all Windows Firewall profiles.',           type: 'security' },
+  { id: 'defender-quick-scan',    name: 'Defender Quick Scan',          desc: 'Triggers a Windows Defender quick scan. Results appear in Windows Security.',         type: 'security' },
+  { id: 'list-startup-items',     name: 'Startup Programs (Registry)',  desc: 'Lists all programs set to auto-start via HKCU and HKLM Run registry keys.',          type: 'security' },
+  { id: 'check-pending-reboot',   name: 'Check Pending Reboot',         desc: 'Checks registry flags to determine if a reboot is required to complete updates.',     type: 'security' },
 ];
 
 export default function CommandHub() {
@@ -131,8 +156,8 @@ export default function CommandHub() {
       <div className="flex gap-4 h-[calc(100vh-160px)]">
         {/* Left Side: Script List */}
         <div className="w-1/2 flex flex-col space-y-4">
-          <div className="flex gap-2 bg-slate-900/60 border border-brand-border rounded-xl p-1 shrink-0">
-            {['all', 'network', 'system', 'repair'].map(type => (
+          <div className="flex gap-2 bg-slate-900/60 border border-brand-border rounded-xl p-1 shrink-0 flex-wrap">
+            {['all', 'network', 'system', 'repair', 'security'].map(type => (
               <button
                 key={type}
                 onClick={() => setActiveFilter(type)}
